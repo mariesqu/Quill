@@ -70,3 +70,71 @@ def test_build_prompt_context_technical():
 def test_build_prompt_context_hint_included():
     system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_EMAIL)
     assert "email" in system.lower()
+
+
+# ── Language override ─────────────────────────────────────────────────────────
+
+def test_build_prompt_language_french():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, language="French")
+    assert "French" in system
+    assert "IMPORTANT" in system  # language override is flagged
+
+
+def test_build_prompt_language_auto_no_override():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, language="auto")
+    # No language constraint injected when auto
+    assert "IMPORTANT" not in system
+
+
+def test_build_prompt_language_empty_no_override():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, language="")
+    assert "IMPORTANT" not in system
+
+
+# ── Persona ───────────────────────────────────────────────────────────────────
+
+PERSONA_ENABLED = {
+    "enabled": True,
+    "tone": "direct",
+    "style": "Short punchy sentences.",
+    "avoid": "passive voice",
+}
+
+PERSONA_DISABLED = {
+    "enabled": False,
+    "tone": "witty",
+    "style": "Use lots of puns.",
+    "avoid": "anything boring",
+}
+
+
+def test_persona_injected_when_enabled():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, persona=PERSONA_ENABLED)
+    assert "Short punchy sentences" in system
+    assert "passive voice" in system
+
+
+def test_persona_tone_injected():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, persona=PERSONA_ENABLED)
+    # "direct" tone → "concise" or "fluff" in the description
+    assert "direct" in system.lower() or "concise" in system.lower() or "fluff" in system.lower()
+
+
+def test_persona_not_injected_when_disabled():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, persona=PERSONA_DISABLED)
+    assert "puns" not in system
+    assert "boring" not in system
+
+
+def test_persona_none_does_not_crash():
+    system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, persona=None)
+    assert SYSTEM_BASE in system
+
+
+def test_language_and_persona_combined():
+    system, _ = build_prompt(
+        "test", "rewrite", MODES, CONTEXT_NEUTRAL,
+        language="Japanese", persona=PERSONA_ENABLED
+    )
+    assert "Japanese" in system
+    assert "Short punchy sentences" in system
