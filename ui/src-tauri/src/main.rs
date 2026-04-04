@@ -96,6 +96,7 @@ fn relay_message(app: &AppHandle, line: &str) {
     let msg_type = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     match msg_type {
+        // ── Overlay core ─────────────────────────────────────────────────────
         "show_overlay" => {
             let _ = app.emit("quill://show_overlay", &msg);
         }
@@ -105,6 +106,25 @@ fn relay_message(app: &AppHandle, line: &str) {
         "stream_done" => {
             let _ = app.emit("quill://stream_done", &msg);
         }
+        // ── Mode chaining ─────────────────────────────────────────────────────
+        "chain_step" => {
+            let _ = app.emit("quill://chain_step", &msg);
+        }
+        // ── Smart suggestion ──────────────────────────────────────────────────
+        "smart_suggestion" => {
+            let _ = app.emit("quill://smart_suggestion", &msg);
+        }
+        // ── AI Tutor ──────────────────────────────────────────────────────────
+        "tutor_explanation" => {
+            let _ = app.emit("quill://tutor_explanation", &msg);
+        }
+        "tutor_lesson" => {
+            let _ = app.emit("quill://tutor_lesson", &msg);
+        }
+        "history" => {
+            let _ = app.emit("quill://history", &msg);
+        }
+        // ── System ────────────────────────────────────────────────────────────
         "error" => {
             let _ = app.emit("quill://error", &msg);
         }
