@@ -48,20 +48,32 @@ def test_load_config_api_key_not_in_default(monkeypatch):
     assert config.get("api_key") is None
 
 
-def test_load_modes_returns_dict():
-    modes = load_modes()
+def test_load_modes_returns_tuple():
+    result = load_modes()
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    modes, chains = result
     assert isinstance(modes, dict)
-    assert len(modes) > 0
+    assert isinstance(chains, dict)
 
 
 def test_load_modes_has_required_keys():
-    modes = load_modes()
+    modes, _ = load_modes()
     required = {"rewrite", "translate", "coach"}
     assert required.issubset(set(modes.keys()))
 
 
 def test_load_modes_each_has_prompt():
-    modes = load_modes()
+    modes, _ = load_modes()
     for name, cfg in modes.items():
         assert "prompt" in cfg, f"Mode '{name}' missing 'prompt'"
         assert "label" in cfg, f"Mode '{name}' missing 'label'"
+
+
+def test_load_chains_has_builtin_chains():
+    _, chains = load_modes()
+    assert len(chains) > 0
+    for chain_id, cfg in chains.items():
+        assert "steps" in cfg, f"Chain '{chain_id}' missing 'steps'"
+        assert isinstance(cfg["steps"], list)
+        assert len(cfg["steps"]) >= 2
