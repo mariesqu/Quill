@@ -86,12 +86,14 @@ class QuillApp:
             log.exception("Error handling hotkey")
             emit_error(str(e))
 
-    async def _handle_mode_selected(self, mode: str) -> None:
+    async def _handle_mode_selected(self, mode: str, language: str | None = None) -> None:
         try:
             context = self.backends["context"].get_active_context()
-            language = self.config.get("language", "auto")
+            # Language: UI picker takes priority over config default
+            effective_language = language if language else self.config.get("language", "auto")
+            persona = self.config.get("persona", {})
             system, user_prompt = build_prompt(
-                self._last_text, mode, self.modes, context, language
+                self._last_text, mode, self.modes, context, effective_language, persona
             )
 
             provider = self._load_provider()
@@ -122,7 +124,10 @@ class QuillApp:
             log.debug("Received command: %s", cmd_type)
 
             if cmd_type == "mode_selected":
-                await self._handle_mode_selected(cmd.get("mode", "rewrite"))
+                await self._handle_mode_selected(
+                    cmd.get("mode", "rewrite"),
+                    language=cmd.get("language"),
+                )
             elif cmd_type == "replace_confirmed":
                 await self._handle_replace_confirmed()
             elif cmd_type == "dismissed":
