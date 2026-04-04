@@ -6,20 +6,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal
 import sys
 from typing import Any
 
-from .config_loader import load_config, load_modes
+from .config_loader import load_config, load_modes, save_user_config
 from .platform import get_backends, get_os
-from .prompt_builder import build_prompt
+from .prompt_builder import build_prompt, suggest_mode
 from .streamer import (
-    emit_chunk,
+    emit_chain_step,
     emit_done,
     emit_error,
+    emit_history,
     emit_permission_required,
     emit_ready,
     emit_show_overlay,
+    emit_smart_suggestion,
+    emit_tutor_explanation,
+    emit_tutor_lesson,
     read_command,
     stream_to_overlay,
 )
@@ -27,7 +30,7 @@ from .streamer import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    stream=sys.stderr,  # stderr only; stdout is the IPC channel
+    stream=sys.stderr,
 )
 log = logging.getLogger("quill.main")
 
@@ -39,33 +42,56 @@ def _modes_list(modes: dict[str, Any]) -> list[dict]:
     ]
 
 
+def _chains_list(chains: dict[str, Any]) -> list[dict]:
+    return [
+        {
+            "id":          k,
+            "label":       v.get("label", k),
+            "icon":        v.get("icon", ""),
+            "steps":       v.get("steps", []),
+            "description": v.get("description", ""),
+        }
+        for k, v in chains.items()
+    ]
+
+
 class QuillApp:
     def __init__(self) -> None:
         self.config = load_config()
-        self.modes = load_modes()
+        self.modes, self.chains = load_modes()
         self.backends: dict | None = None
         self._running = True
         self._last_text: str = ""
         self._last_result: str = ""
+        self._last_entry_id: int | None = None
+        self._last_mode: str = ""
+        self._last_language: str = "auto"
 
     def _load_provider(self):
-        provider_name = self.config.get("provider", "openrouter")
-        if provider_name == "openrouter":
+        name = self.config.get("provider", "openrouter")
+        if name == "openrouter":
             from providers.openrouter import OpenRouterProvider
             return OpenRouterProvider(self.config)
-        elif provider_name == "ollama":
+        elif name == "ollama":
             from providers.ollama import OllamaProvider
             return OllamaProvider(self.config)
-        elif provider_name == "openai":
+        elif name == "openai":
             from providers.openai import OpenAIProvider
             return OpenAIProvider(self.config)
         else:
-            from providers.generic import GenericProvider
-            return GenericProvider(self.config)
+            from providers.generic import GenericOpenAIProvider
+            return GenericOpenAIProvider(self.config)
+
+    def _history_enabled(self) -> bool:
+        return bool(self.config.get("history", {}).get("enabled"))
+
+    def _tutor_enabled(self) -> bool:
+        return bool(self.config.get("tutor", {}).get("enabled")) and self._history_enabled()
 
     def _on_hotkey(self) -> None:
-        """Called from hotkey thread — schedule async work on event loop."""
         asyncio.run_coroutine_threadsafe(self._handle_hotkey(), self._loop)
+
+    # ── Hotkey handler ────────────────────────────────────────────────────────
 
     async def _handle_hotkey(self) -> None:
         try:
@@ -77,30 +103,126 @@ class QuillApp:
             self._last_text = text.strip()
             context = self.backends["context"].get_active_context()
 
+            # Smart mode suggestion (always computed, UI decides whether to show it)
+            suggested_mode, suggestion_reason = suggest_mode(self._last_text, context)
+            emit_smart_suggestion(suggested_mode, suggestion_reason)
+
             emit_show_overlay(
                 text=self._last_text,
                 context=context,
                 modes=_modes_list(self.modes),
+                chains=_chains_list(self.chains),
             )
         except Exception as e:
             log.exception("Error handling hotkey")
             emit_error(str(e))
 
-    async def _handle_mode_selected(self, mode: str) -> None:
-        try:
-            context = self.backends["context"].get_active_context()
-            language = self.config.get("language", "auto")
-            system, user_prompt = build_prompt(
-                self._last_text, mode, self.modes, context, language
-            )
+    # ── Mode execution ────────────────────────────────────────────────────────
 
-            provider = self._load_provider()
-            self._last_result = await stream_to_overlay(
-                provider.stream(user_prompt, system)
+    async def _run_single_mode(
+        self,
+        text: str,
+        mode: str,
+        language: str,
+        extra_instruction: str = "",
+    ) -> str:
+        context  = self.backends["context"].get_active_context()
+        persona  = self.config.get("persona", {})
+        system, user_prompt = build_prompt(
+            text, mode, self.modes, context, language, persona, extra_instruction
+        )
+        provider = self._load_provider()
+        result   = await stream_to_overlay(provider.stream(user_prompt, system))
+        return result
+
+    async def _handle_mode_selected(
+        self,
+        mode: str,
+        language: str | None = None,
+        extra_instruction: str = "",
+    ) -> None:
+        try:
+            effective_language = language or self.config.get("language", "auto")
+            self._last_mode     = mode
+            self._last_language = effective_language
+
+            result = await self._run_single_mode(
+                self._last_text, mode, effective_language, extra_instruction
             )
+            self._last_result = result
+
+            # Save to history
+            entry_id = None
+            if self._history_enabled():
+                from .history import save_entry
+                context = self.backends["context"].get_active_context()
+                entry_id = save_entry(
+                    original=self._last_text,
+                    output=result,
+                    mode=mode,
+                    language=effective_language,
+                    app_hint=context.get("hint", ""),
+                    persona_tone=self.config.get("persona", {}).get("tone", "natural"),
+                )
+            self._last_entry_id = entry_id
+            emit_done(result, entry_id)
+
+            # Auto-explain if tutor is configured that way
+            if self._tutor_enabled() and self.config.get("tutor", {}).get("auto_explain"):
+                await self._handle_tutor_explain(entry_id)
+
         except Exception as e:
             log.exception("Error processing mode %s", mode)
             emit_error(str(e))
+
+    async def _handle_chain_selected(
+        self,
+        chain_id: str,
+        language: str | None = None,
+        extra_instruction: str = "",
+    ) -> None:
+        """Run a chain of modes sequentially."""
+        try:
+            if chain_id not in self.chains:
+                emit_error(f"Unknown chain: {chain_id!r}")
+                return
+
+            chain    = self.chains[chain_id]
+            steps    = chain.get("steps", [])
+            language = language or self.config.get("language", "auto")
+            text     = self._last_text
+
+            for i, mode in enumerate(steps):
+                emit_chain_step(i + 1, len(steps), mode)
+                text = await self._run_single_mode(
+                    text, mode, language,
+                    extra_instruction if i == 0 else ""  # instruction only on first step
+                )
+
+            self._last_result   = text
+            self._last_mode     = f"chain:{chain_id}"
+            self._last_language = language
+
+            entry_id = None
+            if self._history_enabled():
+                from .history import save_entry
+                context  = self.backends["context"].get_active_context()
+                entry_id = save_entry(
+                    original=self._last_text,
+                    output=text,
+                    mode=f"chain:{chain_id}",
+                    language=language,
+                    app_hint=context.get("hint", ""),
+                    persona_tone=self.config.get("persona", {}).get("tone", "natural"),
+                )
+            self._last_entry_id = entry_id
+            emit_done(text, entry_id)
+
+        except Exception as e:
+            log.exception("Error running chain %s", chain_id)
+            emit_error(str(e))
+
+    # ── Replace ───────────────────────────────────────────────────────────────
 
     async def _handle_replace_confirmed(self) -> None:
         try:
@@ -110,42 +232,139 @@ class QuillApp:
             log.exception("Error replacing text")
             emit_error(str(e))
 
+    # ── Retry ─────────────────────────────────────────────────────────────────
+
+    async def _handle_retry(self, extra_instruction: str = "") -> None:
+        if not self._last_mode or not self._last_text:
+            emit_error("Nothing to retry.")
+            return
+        if self._last_mode.startswith("chain:"):
+            chain_id = self._last_mode[6:]
+            await self._handle_chain_selected(chain_id, self._last_language, extra_instruction)
+        else:
+            await self._handle_mode_selected(self._last_mode, self._last_language, extra_instruction)
+
+    # ── AI Tutor ──────────────────────────────────────────────────────────────
+
+    async def _handle_tutor_explain(self, entry_id: int | None = None) -> None:
+        try:
+            from .tutor import build_explain_prompt
+            system, user_prompt = build_explain_prompt(
+                original=self._last_text,
+                output=self._last_result,
+                mode=self._last_mode,
+                language=self._last_language,
+            )
+            provider = self._load_provider()
+            explanation = ""
+            async for chunk in provider.stream(user_prompt, system):
+                explanation += chunk
+            emit_tutor_explanation(explanation, entry_id)
+
+            if entry_id and self._history_enabled():
+                from .history import save_tutor_explanation
+                save_tutor_explanation(entry_id, explanation)
+
+        except Exception as e:
+            log.exception("Error generating tutor explanation")
+            emit_error(str(e))
+
+    async def _handle_generate_lesson(self, period: str = "daily") -> None:
+        try:
+            from .history import get_stats, save_lesson, get_latest_lesson
+            from .tutor import build_lesson_prompt
+
+            stats  = get_stats(days=1 if period == "daily" else 7)
+            system, user_prompt = build_lesson_prompt(stats, period)
+            provider = self._load_provider()
+            lesson = ""
+            async for chunk in provider.stream(user_prompt, system):
+                lesson += chunk
+            emit_tutor_lesson(lesson, period)
+            save_lesson(period, lesson, stats.get("top_language", ""))
+
+        except Exception as e:
+            log.exception("Error generating lesson")
+            emit_error(str(e))
+
+    async def _handle_get_history(self, limit: int = 30, language: str | None = None) -> None:
+        try:
+            from .history import get_recent
+            entries = get_recent(limit=limit, language=language)
+            emit_history(entries)
+        except Exception as e:
+            log.exception("Error fetching history")
+            emit_error(str(e))
+
+    # ── Command loop ──────────────────────────────────────────────────────────
+
     async def _command_loop(self) -> None:
         while self._running:
             cmd = await read_command()
             if cmd is None:
-                # stdin closed → Tauri exited
                 self._running = False
                 break
 
-            cmd_type = cmd.get("type")
-            log.debug("Received command: %s", cmd_type)
+            t = cmd.get("type")
+            log.debug("Command: %s", t)
 
-            if cmd_type == "mode_selected":
-                await self._handle_mode_selected(cmd.get("mode", "rewrite"))
-            elif cmd_type == "replace_confirmed":
+            if t == "mode_selected":
+                await self._handle_mode_selected(
+                    cmd.get("mode", "rewrite"),
+                    language=cmd.get("language"),
+                    extra_instruction=cmd.get("extra_instruction", ""),
+                )
+            elif t == "chain_selected":
+                await self._handle_chain_selected(
+                    cmd.get("chain_id", ""),
+                    language=cmd.get("language"),
+                    extra_instruction=cmd.get("extra_instruction", ""),
+                )
+            elif t == "retry":
+                await self._handle_retry(
+                    extra_instruction=cmd.get("extra_instruction", "")
+                )
+            elif t == "replace_confirmed":
                 await self._handle_replace_confirmed()
-            elif cmd_type == "dismissed":
+            elif t == "dismissed":
                 self._last_result = ""
-            elif cmd_type == "ping":
+            elif t == "tutor_explain":
+                await self._handle_tutor_explain(cmd.get("entry_id"))
+            elif t == "generate_lesson":
+                await self._handle_generate_lesson(cmd.get("period", "daily"))
+            elif t == "get_history":
+                await self._handle_get_history(
+                    limit=cmd.get("limit", 30),
+                    language=cmd.get("language"),
+                )
+            elif t == "ping":
                 emit_ready()
-            elif cmd_type == "save_config":
-                from .config_loader import save_user_config
+            elif t == "save_config":
                 save_user_config(cmd.get("config", {}))
                 self.config = load_config()
+                self.modes, self.chains = load_modes()
+                if self._history_enabled():
+                    from .history import init_db
+                    init_db()
             else:
-                log.warning("Unknown command type: %s", cmd_type)
+                log.warning("Unknown command: %s", t)
+
+    # ── Entry point ───────────────────────────────────────────────────────────
 
     async def run(self) -> None:
         self._loop = asyncio.get_event_loop()
 
-        # Load backends
+        # Initialise history DB if enabled
+        if self._history_enabled():
+            from .history import init_db
+            init_db()
+
+        # Load platform backends
         try:
             self.backends = get_backends()
         except PermissionError as e:
             if str(e) == "accessibility":
                 emit_permission_required("accessibility")
-                # Wait for user to grant permission then retry
                 await asyncio.sleep(5)
                 self.backends = get_backends()
             else:
@@ -155,10 +374,8 @@ class QuillApp:
         hotkey = self.config.get("hotkey", "ctrl+shift+space")
         self.backends["hotkey"].register(hotkey, self._on_hotkey)
         log.info("Quill ready. Hotkey: %s", hotkey)
-
         emit_ready()
 
-        # Run command loop
         try:
             await self._command_loop()
         finally:

@@ -1,4 +1,4 @@
-/* Quill Overlay Styles */
+/* Quill Overlay Styles — includes all new feature styles */
 
 .overlay-root {
   position: fixed;
@@ -120,6 +120,104 @@
   -webkit-box-orient: vertical;
   word-break: break-word;
 }
+
+/* ── Language Picker ──────────────────────────────────────────────────────── */
+
+.language-picker {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.language-picker::-webkit-scrollbar {
+  display: none;
+}
+
+.language-picker-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.language-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.lang-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--color-text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  line-height: 1;
+}
+
+.lang-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--color-border-hover);
+  color: var(--color-text-muted);
+}
+
+.lang-chip.active {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.lang-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.lang-flag {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.lang-name {
+  font-size: 11px;
+}
+
+.lang-custom-form {
+  display: flex;
+}
+
+.lang-custom-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 100px;
+  color: var(--color-text);
+  font-size: 11px;
+  padding: 4px 10px;
+  outline: none;
+  width: 90px;
+  transition: border-color var(--transition-fast);
+}
+
+.lang-custom-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+/* ── Mode bar ─────────────────────────────────────────────────────────────── */
 
 /* Mode bar */
 .overlay-modes {
@@ -340,4 +438,183 @@
   color: var(--color-success);
   pointer-events: none;
   animation: slide-up 200ms ease both;
+}
+
+/* ── Word count badge ─────────────────────────────────────────────────────── */
+
+.word-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
+/* ── Smart suggestion ─────────────────────────────────────────────────────── */
+
+.smart-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 0;
+  padding: 7px 12px;
+  background: rgba(251, 146, 60, 0.08);
+  border: 1px solid rgba(251, 146, 60, 0.25);
+  border-radius: var(--radius-md);
+  color: #fb923c;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  width: calc(100% - 32px);
+  transition: all var(--transition-fast);
+}
+
+.smart-suggestion:hover {
+  background: rgba(251, 146, 60, 0.14);
+  border-color: rgba(251, 146, 60, 0.4);
+}
+
+.smart-suggestion strong { font-weight: 700; }
+
+.smart-suggestion-reason {
+  color: rgba(251, 146, 60, 0.7);
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+/* ── Mode suggestion dot ──────────────────────────────────────────────────── */
+
+.mode-btn.suggested {
+  border-color: rgba(251, 146, 60, 0.4);
+}
+
+.mode-suggested-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fb923c;
+  flex-shrink: 0;
+}
+
+/* ── Mode chain button ────────────────────────────────────────────────────── */
+
+.mode-btn-chain {
+  border-style: dashed;
+  font-size: 11px;
+}
+
+/* ── One-off instruction field ────────────────────────────────────────────── */
+
+.instruction-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color var(--transition-fast);
+}
+
+.instruction-toggle:hover { color: var(--color-text-muted); }
+.instruction-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.instruction-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.instruction-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.instruction-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-glow);
+}
+
+.instruction-input::placeholder { color: var(--color-text-dim); }
+
+.instruction-clear {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color var(--transition-fast);
+}
+.instruction-clear:hover { color: var(--color-text); }
+
+/* ── Chain progress ───────────────────────────────────────────────────────── */
+
+.chain-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: rgba(124, 110, 247, 0.04);
+}
+
+.chain-progress-steps { display: flex; gap: 4px; }
+
+.chain-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: background var(--transition-base);
+}
+
+.chain-step-dot.done   { background: var(--color-success); }
+.chain-step-dot.active { background: var(--color-primary); animation: pulse-dot 1s infinite; }
+
+/* ── Tutor explain trigger ────────────────────────────────────────────────── */
+
+.tutor-explain-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.tutor-explain-trigger:hover {
+  background: var(--color-primary-dim);
+}
+
+.tutor-explain-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-text-dim);
 }
