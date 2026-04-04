@@ -125,11 +125,12 @@ fn relay_message(app: &AppHandle, line: &str) {
 }
 
 fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let show = MenuItem::with_id(app, "show", "Show Quill", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
-    let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Quill", true, None::<&str>)?;
-    Menu::with_items(app, &[&show, &settings, &separator, &quit])
+    let show     = MenuItem::with_id(app, "show",     "Show Quill",   true, None::<&str>)?;
+    let tutor    = MenuItem::with_id(app, "tutor",    "AI Tutor…",    true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Settings…",    true, None::<&str>)?;
+    let sep      = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let quit     = MenuItem::with_id(app, "quit",     "Quit Quill",   true, None::<&str>)?;
+    Menu::with_items(app, &[&show, &tutor, &settings, &sep, &quit])
 }
 
 fn main() {
@@ -161,6 +162,13 @@ fn main() {
                 })
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
+                        if let Some(window) = app.get_webview_window("overlay") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "tutor" => {
+                        let _ = app.emit("quill://open_tutor", ());
                         if let Some(window) = app.get_webview_window("overlay") {
                             let _ = window.show();
                             let _ = window.set_focus();

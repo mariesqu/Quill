@@ -14,13 +14,21 @@ overlay_position: near_cursor        # near_cursor | top_right | top_left
 stream: true
 
 # ── Persona / Voice ───────────────────────────────────────────────────────────
-# When enabled, these constraints are injected into every AI request so that
-# output sounds more like you, regardless of which mode is used.
 persona:
   enabled: false
   tone: natural                      # natural | casual | professional | witty | direct | warm
-  style: ""                          # Free text: "Short punchy sentences. I use em-dashes."
-  avoid: ""                          # Things to avoid: "passive voice, corporate buzzwords"
+  style: ""
+  avoid: ""
+
+# ── History & AI Tutor ────────────────────────────────────────────────────────
+history:
+  enabled: false                     # opt-in: stores transformations locally in ~/.quill/history.db
+  max_entries: 10000                 # entries beyond this are pruned (oldest first)
+
+tutor:
+  enabled: false                     # AI Tutor features (requires history.enabled: true)
+  auto_explain: false                # Automatically show explanation after each transformation
+  lesson_language: auto              # Focus lessons on this language (auto = most-used)
 
 # Context-aware mode overrides (optional)
 # context:

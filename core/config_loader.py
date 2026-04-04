@@ -13,12 +13,11 @@ import yaml
 
 _ROOT = Path(__file__).parent.parent
 _DEFAULT_CONFIG = _ROOT / "config" / "default.yaml"
-_USER_CONFIG = _ROOT / "config" / "user.yaml"
-_MODES_CONFIG = _ROOT / "config" / "modes.yaml"
+_USER_CONFIG    = _ROOT / "config" / "user.yaml"
+_MODES_CONFIG   = _ROOT / "config" / "modes.yaml"
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    """Recursively merge override into base."""
     result = base.copy()
     for k, v in override.items():
         if k in result and isinstance(result[k], dict) and isinstance(v, dict):
@@ -29,7 +28,6 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_config() -> dict[str, Any]:
-    """Load and merge configuration. Never returns api_key in logs."""
     with open(_DEFAULT_CONFIG) as f:
         config = yaml.safe_load(f) or {}
 
@@ -50,39 +48,38 @@ def load_config() -> dict[str, Any]:
 
     # Resolve adaptive hotkey
     if config.get("hotkey") is None:
-        if platform.system() == "Darwin":
-            config["hotkey"] = "cmd+shift+space"
-        else:
-            config["hotkey"] = "ctrl+shift+space"
+        config["hotkey"] = "cmd+shift+space" if platform.system() == "Darwin" else "ctrl+shift+space"
 
     return config
 
 
-def load_modes() -> dict[str, Any]:
-    """Load built-in + user-defined modes."""
+def load_modes() -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Returns (modes, chains) dicts.
+    Modes and chains from user.yaml are merged on top of defaults.
+    """
     with open(_MODES_CONFIG) as f:
         data = yaml.safe_load(f) or {}
-    modes = data.get("modes", {})
 
-    # Merge custom modes from user.yaml if present
+    modes  = data.get("modes",  {})
+    chains = data.get("chains", {})
+
     if _USER_CONFIG.exists():
         with open(_USER_CONFIG) as f:
             user = yaml.safe_load(f) or {}
-        custom = user.get("custom_modes", {})
-        modes.update(custom)
+        modes.update(user.get("custom_modes",  {}))
+        chains.update(user.get("custom_chains", {}))
 
-    return modes
+    return modes, chains
 
 
 def save_user_config(updates: dict[str, Any]) -> None:
-    """Persist user-specific settings to config/user.yaml."""
     existing: dict = {}
     if _USER_CONFIG.exists():
         with open(_USER_CONFIG) as f:
             existing = yaml.safe_load(f) or {}
 
     merged = _deep_merge(existing, updates)
-
     _USER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     with open(_USER_CONFIG, "w") as f:
         yaml.dump(merged, f, default_flow_style=False, allow_unicode=True)

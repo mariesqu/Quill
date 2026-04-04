@@ -53,13 +53,15 @@ function ToneSelector({ value, onChange }) {
 
 export default function Settings({ onClose, bridge }) {
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState("provider"); // provider | behaviour | persona | about
+  const [activeTab, setActiveTab] = useState("provider"); // provider | behaviour | persona | tutor | about
 
   const stored = (() => {
     try { return JSON.parse(localStorage.getItem("quill_config_pending") || "{}"); }
     catch { return {}; }
   })();
-  const storedPersona = stored.persona || {};
+  const storedPersona  = stored.persona  || {};
+  const storedHistory  = stored.history  || {};
+  const storedTutor    = stored.tutor    || {};
 
   // Provider
   const [provider, setProvider]   = useState(stored.provider || "openrouter");
@@ -78,10 +80,16 @@ export default function Settings({ onClose, bridge }) {
   const [personaStyle, setPersonaStyle]     = useState(storedPersona.style || "");
   const [personaAvoid, setPersonaAvoid]     = useState(storedPersona.avoid || "");
 
+  // History & Tutor
+  const [historyEnabled, setHistoryEnabled]         = useState(storedHistory.enabled ?? false);
+  const [tutorEnabled, setTutorEnabled]             = useState(storedTutor.enabled ?? false);
+  const [tutorAutoExplain, setTutorAutoExplain]     = useState(storedTutor.auto_explain ?? false);
+
   const handleSave = async () => {
     const config = {
-      provider,
-      model,
+      provider, model,
+      history: { enabled: historyEnabled },
+      tutor:   { enabled: tutorEnabled, auto_explain: tutorAutoExplain },
       overlay_position: overlayPos,
       stream,
       persona: {
@@ -105,6 +113,7 @@ export default function Settings({ onClose, bridge }) {
     { id: "provider",  label: "AI Provider" },
     { id: "behaviour", label: "Behaviour" },
     { id: "persona",   label: "My Voice" + (personaEnabled ? " ✦" : "") },
+    { id: "tutor",     label: "AI Tutor" + (tutorEnabled ? " ✦" : "") },
     { id: "about",     label: "About" },
   ];
 
@@ -300,6 +309,58 @@ export default function Settings({ onClose, bridge }) {
                   </div>
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ── AI Tutor ────────────────────────────────────────────────────── */}
+        {activeTab === "tutor" && (
+          <div className="settings-section">
+            <div className="settings-card">
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row-label">Enable History</div>
+                  <div className="settings-row-desc">
+                    Save all transformations locally in ~/.quill/history.db (opt-in)
+                  </div>
+                </div>
+                <Toggle checked={historyEnabled} onChange={setHistoryEnabled} />
+              </div>
+            </div>
+
+            {historyEnabled && (
+              <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-label">Enable AI Tutor</div>
+                    <div className="settings-row-desc">
+                      Generate personalised lessons and explain changes using your history
+                    </div>
+                  </div>
+                  <Toggle checked={tutorEnabled} onChange={setTutorEnabled} />
+                </div>
+                {tutorEnabled && (
+                  <div className="settings-row">
+                    <div>
+                      <div className="settings-row-label">Auto-explain changes</div>
+                      <div className="settings-row-desc">
+                        Automatically show tutor insight after every transformation
+                      </div>
+                    </div>
+                    <Toggle checked={tutorAutoExplain} onChange={setTutorAutoExplain} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!historyEnabled && (
+              <div style={{ padding: "12px 14px", background: "rgba(124,110,247,0.06)",
+                border: "1px solid rgba(124,110,247,0.18)", borderRadius: "var(--radius-md)",
+                fontSize: 12, color: "var(--color-text-muted)", lineHeight: 1.6 }}>
+                🎓 Enable History above to unlock the AI Tutor. Your data stays
+                100% local — nothing is ever sent to the cloud except the AI prompts
+                you already send to your chosen provider.
+              </div>
             )}
           </div>
         )}
