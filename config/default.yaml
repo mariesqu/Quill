@@ -1,0 +1,21 @@
+# Quill default configuration
+# Copy to config/user.yaml to override (user.yaml is gitignored)
+
+provider: openrouter
+model: google/gemma-3-27b-it        # Free tier on OpenRouter
+api_key: null                        # Set via env QUILL_API_KEY or settings UI
+base_url: https://openrouter.ai/api/v1
+
+# null = OS-adaptive: Ctrl+Shift+Space on Windows/Linux, Cmd+Shift+Space on macOS
+hotkey: null
+
+language: auto                       # Target language for translation (auto = detect)
+overlay_position: near_cursor        # near_cursor | top_right | top_left
+stream: true
+
+# Context-aware mode overrides (optional)
+# context:
+#   outlook:
+#     default_mode: formal
+#   code:
+#     default_mode: technical
