@@ -4,6 +4,7 @@ Used for OpenRouter, OpenAI, LM Studio, Jan.ai, Groq, etc.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import AsyncIterator, Any
 
@@ -12,6 +13,38 @@ import httpx
 from .base import BaseProvider
 
 log = logging.getLogger(__name__)
+
+
+def _friendly_error(status_code: int, body: str, model: str) -> str:
+    """Return a human-readable error message from an API error response."""
+    # Try to extract the API's own message first
+    api_msg = ""
+    try:
+        data = json.loads(body)
+        api_msg = (
+            data.get("error", {}).get("message")
+            or data.get("message")
+            or ""
+        )
+    except Exception:
+        api_msg = body.strip()
+
+    if status_code == 400:
+        detail = api_msg or "The request was rejected by the API."
+        return f"Bad request (400): {detail}"
+    if status_code == 401:
+        return "Invalid API key (401). Check your key in Settings → AI Provider."
+    if status_code == 402:
+        return "Insufficient credits (402). Top up your account or switch to a free model."
+    if status_code == 403:
+        return f"Access denied (403). Your key may not have access to model '{model}'."
+    if status_code == 404:
+        return f"Model not found (404): '{model}'. Check the model name in Settings → AI Provider."
+    if status_code == 429:
+        return "Rate limit reached (429). Wait a moment and try again, or switch to a different model."
+    if status_code >= 500:
+        return f"Provider server error ({status_code}). The API is having issues — try again shortly."
+    return f"API error {status_code}: {api_msg or 'Unknown error'}"
 
 
 class GenericOpenAIProvider(BaseProvider):
@@ -52,7 +85,18 @@ class GenericOpenAIProvider(BaseProvider):
                 json=payload,
                 headers=headers,
             ) as response:
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    # Read the error body before raising so we can surface a useful message
+                    body = await response.aread()
+                    body_text = body.decode("utf-8", errors="replace")
+                    log.error(
+                        "API error %s from %s: %s",
+                        response.status_code, self._base_url, body_text
+                    )
+                    raise RuntimeError(
+                        _friendly_error(response.status_code, body_text, self._model)
+                    )
+
                 async for line in response.aiter_lines():
                     if not line.startswith("data: "):
                         continue
@@ -60,7 +104,6 @@ class GenericOpenAIProvider(BaseProvider):
                     if data.strip() == "[DONE]":
                         break
                     try:
-                        import json
                         chunk = json.loads(data)
                         delta = chunk["choices"][0]["delta"]
                         content = delta.get("content", "")

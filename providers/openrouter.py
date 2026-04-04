@@ -27,7 +27,7 @@ class OpenRouterProvider(GenericOpenAIProvider):
         # OpenRouter requires HTTP-Referer for rate limiting attribution
         import httpx
         import json
-        from typing import AsyncIterator
+        from .generic import _friendly_error
 
         messages = []
         if system:
@@ -53,7 +53,17 @@ class OpenRouterProvider(GenericOpenAIProvider):
                 json=payload,
                 headers=headers,
             ) as response:
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    body_text = body.decode("utf-8", errors="replace")
+                    log.error(
+                        "OpenRouter API error %s: %s",
+                        response.status_code, body_text
+                    )
+                    raise RuntimeError(
+                        _friendly_error(response.status_code, body_text, self._model)
+                    )
+
                 async for line in response.aiter_lines():
                     if not line.startswith("data: "):
                         continue

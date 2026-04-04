@@ -44,7 +44,20 @@ class OllamaProvider(BaseProvider):
                 f"{self._base_url}/api/generate",
                 json=payload,
             ) as response:
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    body_text = body.decode("utf-8", errors="replace")
+                    log.error("Ollama error %s: %s", response.status_code, body_text)
+                    if response.status_code == 404:
+                        raise RuntimeError(
+                            f"Model '{self._model}' not found. Run: ollama pull {self._model}"
+                        )
+                    try:
+                        err = json.loads(body_text).get("error", body_text)
+                    except Exception:
+                        err = body_text
+                    raise RuntimeError(f"Ollama error {response.status_code}: {err}")
+
                 async for line in response.aiter_lines():
                     if not line.strip():
                         continue
