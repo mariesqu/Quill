@@ -52,9 +52,33 @@ modes:
       Aim for roughly double the original length while keeping quality high.
       Return only the expanded text.
 
-# Add custom modes here or in config/user.yaml
+# ── Mode chains ───────────────────────────────────────────────────────────────
+# Chains run modes sequentially. The output of each step becomes the input of the next.
+# Define chains here or in config/user.yaml under custom_chains:
+
+chains:
+  fix_then_formal:
+    label: "Fix → Formal"
+    icon: "✨"
+    steps: [fix_grammar, formal]
+    description: "Correct errors, then rewrite for business tone"
+
+  fix_then_translate:
+    label: "Fix → Translate"
+    icon: "🔧🌐"
+    steps: [fix_grammar, translate]
+    description: "Correct errors, then translate to target language"
+
+  rewrite_then_shorter:
+    label: "Polish → Short"
+    icon: "✏️✂️"
+    steps: [rewrite, shorter]
+    description: "Improve clarity, then trim to essentials"
+
+# ── Custom modes ─────────────────────────────────────────────────────────────
+# Add your own modes here or in config/user.yaml under custom_modes:
 # custom_modes:
 #   legal:
 #     label: "Legal"
 #     icon: "⚖️"
-#     prompt: "Rewrite in formal legal language..."
+#     prompt: "Rewrite in formal legal language. Return only the rewritten text."
