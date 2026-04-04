@@ -9,9 +9,18 @@ base_url: https://openrouter.ai/api/v1
 # null = OS-adaptive: Ctrl+Shift+Space on Windows/Linux, Cmd+Shift+Space on macOS
 hotkey: null
 
-language: auto                       # Target language for translation (auto = detect)
+language: auto                       # Default output language (overridden per-invocation by the overlay picker)
 overlay_position: near_cursor        # near_cursor | top_right | top_left
 stream: true
+
+# ── Persona / Voice ───────────────────────────────────────────────────────────
+# When enabled, these constraints are injected into every AI request so that
+# output sounds more like you, regardless of which mode is used.
+persona:
+  enabled: false
+  tone: natural                      # natural | casual | professional | witty | direct | warm
+  style: ""                          # Free text: "Short punchy sentences. I use em-dashes."
+  avoid: ""                          # Things to avoid: "passive voice, corporate buzzwords"
 
 # Context-aware mode overrides (optional)
 # context:

@@ -2,14 +2,29 @@ import React, { useState, useEffect, useCallback } from "react";
 import "../styles/overlay.css";
 
 const MODE_COLORS = {
-  rewrite: "#7c6ef7",
-  translate: "#38bdf8",
-  coach: "#fb923c",
-  shorter: "#a78bfa",
-  formal: "#64748b",
-  fix_grammar: "#34d399",
-  expand: "#f472b6",
+  rewrite:       "#7c6ef7",
+  translate:     "#38bdf8",
+  coach:         "#fb923c",
+  shorter:       "#a78bfa",
+  formal:        "#64748b",
+  fix_grammar:   "#34d399",
+  expand:        "#f472b6",
 };
+
+// Common languages with flags for quick selection
+const QUICK_LANGUAGES = [
+  { code: "auto",       label: "Auto",       flag: "🔤" },
+  { code: "French",     label: "French",     flag: "🇫🇷" },
+  { code: "Spanish",    label: "Spanish",    flag: "🇪🇸" },
+  { code: "German",     label: "German",     flag: "🇩🇪" },
+  { code: "Portuguese", label: "Portuguese", flag: "🇵🇹" },
+  { code: "Italian",    label: "Italian",    flag: "🇮🇹" },
+  { code: "Japanese",   label: "Japanese",   flag: "🇯🇵" },
+  { code: "Chinese",    label: "Chinese",    flag: "🇨🇳" },
+  { code: "Arabic",     label: "Arabic",     flag: "🇸🇦" },
+  { code: "Dutch",      label: "Dutch",      flag: "🇳🇱" },
+  { code: "Korean",     label: "Korean",     flag: "🇰🇷" },
+];
 
 function ContextBadge({ context }) {
   if (!context?.hint) return null;
@@ -17,6 +32,76 @@ function ContextBadge({ context }) {
     <div className="overlay-context-badge">
       <div className="overlay-context-dot" />
       {context.hint}
+    </div>
+  );
+}
+
+function LanguagePicker({ value, onChange, disabled }) {
+  const [custom, setCustom] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+
+  const isCustom = !QUICK_LANGUAGES.find((l) => l.code === value);
+  const current = QUICK_LANGUAGES.find((l) => l.code === value);
+
+  const handleQuick = (code) => {
+    setShowCustom(false);
+    onChange(code);
+  };
+
+  const handleCustomSubmit = (e) => {
+    e.preventDefault();
+    if (custom.trim()) {
+      onChange(custom.trim());
+      setShowCustom(false);
+      setCustom("");
+    }
+  };
+
+  return (
+    <div className="language-picker">
+      <span className="language-picker-label">Output in</span>
+      <div className="language-chips">
+        {QUICK_LANGUAGES.map((lang) => (
+          <button
+            key={lang.code}
+            className={`lang-chip ${value === lang.code ? "active" : ""}`}
+            onClick={() => handleQuick(lang.code)}
+            disabled={disabled}
+            title={lang.label}
+          >
+            <span className="lang-flag">{lang.flag}</span>
+            <span className="lang-name">{lang.label}</span>
+          </button>
+        ))}
+
+        {/* Custom language button / input */}
+        {showCustom ? (
+          <form onSubmit={handleCustomSubmit} className="lang-custom-form">
+            <input
+              className="lang-custom-input"
+              type="text"
+              placeholder="e.g. Polish"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              autoFocus
+              onBlur={() => { if (!custom.trim()) setShowCustom(false); }}
+            />
+          </form>
+        ) : (
+          <button
+            className={`lang-chip ${isCustom ? "active" : ""}`}
+            onClick={() => setShowCustom(true)}
+            disabled={disabled}
+            title="Other language"
+          >
+            {isCustom ? (
+              <><span className="lang-flag">🌐</span><span className="lang-name">{value}</span></>
+            ) : (
+              <span className="lang-name">+ Other</span>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -33,7 +118,6 @@ function ModeBar({ modes, activeMode, isStreaming, onSelect }) {
           style={
             activeMode === mode.id
               ? {
-                  "--mode-color": MODE_COLORS[mode.id] || "#7c6ef7",
                   background: `${MODE_COLORS[mode.id] || "#7c6ef7"}18`,
                   borderColor: `${MODE_COLORS[mode.id] || "#7c6ef7"}60`,
                   color: MODE_COLORS[mode.id] || "#7c6ef7",
@@ -49,8 +133,9 @@ function ModeBar({ modes, activeMode, isStreaming, onSelect }) {
   );
 }
 
-function StreamingIndicator({ activeMode, modes }) {
+function StreamingIndicator({ activeMode, modes, language }) {
   const mode = modes.find((m) => m.id === activeMode);
+  const langSuffix = language && language !== "auto" ? ` → ${language}` : "";
   return (
     <div className="streaming-indicator">
       <div className="streaming-dots">
@@ -58,12 +143,12 @@ function StreamingIndicator({ activeMode, modes }) {
         <div className="streaming-dot" />
         <div className="streaming-dot" />
       </div>
-      {mode ? `${mode.label}…` : "Working…"}
+      {mode ? `${mode.label}${langSuffix}…` : "Working…"}
     </div>
   );
 }
 
-function OutputArea({ streamedText, isStreaming, isDone, activeMode }) {
+function OutputArea({ streamedText, isStreaming, activeMode }) {
   if (!activeMode && !streamedText) {
     return (
       <div className="overlay-output">
@@ -98,6 +183,8 @@ export default function Overlay({ bridge }) {
     isStreaming,
     isDone,
     error,
+    outputLanguage,
+    setOutputLanguage,
     selectMode,
     confirmReplace,
     dismiss,
@@ -160,6 +247,13 @@ export default function Overlay({ bridge }) {
           <div className="overlay-source-text">{selectedText}</div>
         </div>
 
+        {/* Language picker */}
+        <LanguagePicker
+          value={outputLanguage}
+          onChange={setOutputLanguage}
+          disabled={isStreaming}
+        />
+
         {/* Mode selector */}
         <ModeBar
           modes={modes}
@@ -170,7 +264,11 @@ export default function Overlay({ bridge }) {
 
         {/* Streaming indicator */}
         {isStreaming && (
-          <StreamingIndicator activeMode={activeMode} modes={modes} />
+          <StreamingIndicator
+            activeMode={activeMode}
+            modes={modes}
+            language={outputLanguage !== "auto" ? outputLanguage : null}
+          />
         )}
 
         {/* Error */}
@@ -185,7 +283,6 @@ export default function Overlay({ bridge }) {
         <OutputArea
           streamedText={streamedText}
           isStreaming={isStreaming}
-          isDone={isDone}
           activeMode={activeMode}
         />
 
@@ -207,7 +304,6 @@ export default function Overlay({ bridge }) {
           </button>
         </div>
 
-        {/* Copy toast */}
         {copied && <div className="copy-toast">Copied to clipboard</div>}
       </div>
     </div>
