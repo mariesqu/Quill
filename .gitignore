@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.env
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Quill user config (contains API keys)
+config/user.yaml
+
+# Node
+node_modules/
+ui/dist/
+
+# Tauri build
+ui/src-tauri/target/
+ui/src-tauri/quill-core
+ui/src-tauri/quill-core.exe
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.iml

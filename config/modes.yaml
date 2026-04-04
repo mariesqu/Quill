@@ -1,0 +1,60 @@
+modes:
+  rewrite:
+    label: "Rewrite"
+    icon: "✏️"
+    prompt: |
+      Rewrite the following text to improve clarity and flow.
+      Keep the same meaning and approximate length.
+      Return only the rewritten text, no explanation.
+
+  translate:
+    label: "Translate"
+    icon: "🌐"
+    prompt: |
+      Translate the following text to {language}.
+      If already in {language}, improve the phrasing.
+      Return only the translated text, no explanation.
+
+  coach:
+    label: "Coach"
+    icon: "💡"
+    prompt: |
+      Give 2-3 specific, actionable suggestions to improve this text's
+      clarity, tone, or impact. Be concise and direct.
+
+  shorter:
+    label: "Shorter"
+    icon: "✂️"
+    prompt: |
+      Make this 40-50% shorter while keeping the key message.
+      Return only the shortened text.
+
+  formal:
+    label: "Formal"
+    icon: "👔"
+    prompt: |
+      Rewrite in a professional, formal tone suitable for business.
+      Return only the rewritten text.
+
+  fix_grammar:
+    label: "Fix Grammar"
+    icon: "📝"
+    prompt: |
+      Fix all grammar, spelling, and punctuation errors in the following text.
+      Keep the original meaning and style intact.
+      Return only the corrected text, no explanation.
+
+  expand:
+    label: "Expand"
+    icon: "📖"
+    prompt: |
+      Expand this text with more detail, context, and depth.
+      Aim for roughly double the original length while keeping quality high.
+      Return only the expanded text.
+
+# Add custom modes here or in config/user.yaml
+# custom_modes:
+#   legal:
+#     label: "Legal"
+#     icon: "⚖️"
+#     prompt: "Rewrite in formal legal language..."
