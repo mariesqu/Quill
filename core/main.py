@@ -14,13 +14,19 @@ from .platform import get_backends, get_os
 from .prompt_builder import build_prompt, suggest_mode
 from .streamer import (
     emit_chain_step,
+    emit_comparison_done,
+    emit_clipboard_change,
     emit_done,
     emit_error,
+    emit_export_data,
+    emit_favorite_toggled,
     emit_history,
     emit_permission_required,
+    emit_pronunciation,
     emit_ready,
     emit_show_overlay,
     emit_smart_suggestion,
+    emit_templates,
     emit_tutor_explanation,
     emit_tutor_lesson,
     read_command,
@@ -296,6 +302,148 @@ class QuillApp:
             log.exception("Error fetching history")
             emit_error(str(e))
 
+    # ── Favorites ─────────────────────────────────────────────────────────────
+
+    async def _handle_toggle_favorite(self, entry_id: int) -> None:
+        try:
+            from .history import toggle_favorite
+            favorited = toggle_favorite(entry_id)
+            emit_favorite_toggled(entry_id, favorited)
+        except Exception as e:
+            log.exception("Error toggling favorite")
+            emit_error(str(e))
+
+    # ── Export history ────────────────────────────────────────────────────────
+
+    async def _handle_export_history(self, fmt: str = "json") -> None:
+        try:
+            from .history import get_all_entries
+            entries = get_all_entries()
+            emit_export_data(entries, fmt)
+        except Exception as e:
+            log.exception("Error exporting history")
+            emit_error(str(e))
+
+    # ── Comparison mode ───────────────────────────────────────────────────────
+
+    async def _handle_compare_modes(
+        self,
+        mode_a: str,
+        mode_b: str,
+        language: str | None = None,
+        extra_instruction: str = "",
+    ) -> None:
+        try:
+            lang = language or self.config.get("language", "auto")
+            context  = self.backends["context"].get_active_context()
+            persona  = self.config.get("persona", {})
+
+            system_a, prompt_a = build_prompt(
+                self._last_text, mode_a, self.modes, context, lang, persona, extra_instruction
+            )
+            system_b, prompt_b = build_prompt(
+                self._last_text, mode_b, self.modes, context, lang, persona, extra_instruction
+            )
+            provider = self._load_provider()
+            result_a = ""
+            async for chunk in provider.stream(prompt_a, system_a):
+                result_a += chunk
+            result_b = ""
+            async for chunk in provider.stream(prompt_b, system_b):
+                result_b += chunk
+
+            emit_comparison_done(mode_a, result_a, mode_b, result_b)
+        except Exception as e:
+            log.exception("Error running comparison")
+            emit_error(str(e))
+
+    # ── Pronunciation guide ───────────────────────────────────────────────────
+
+    async def _handle_get_pronunciation(self, text: str, language: str) -> None:
+        try:
+            system = (
+                "You are a pronunciation guide. Given text in a specific language, "
+                "provide: 1) IPA transcription, 2) easy phonetic romanization for "
+                "English speakers, 3) one-sentence tip on the trickiest sounds. "
+                "Be concise and practical. No preamble."
+            )
+            user_prompt = (
+                f"Provide pronunciation guide for this {language} text:\n\n{text}"
+            )
+            provider = self._load_provider()
+            result = ""
+            async for chunk in provider.stream(user_prompt, system):
+                result += chunk
+            emit_pronunciation(result)
+        except Exception as e:
+            log.exception("Error getting pronunciation")
+            emit_error(str(e))
+
+    # ── Quick templates ───────────────────────────────────────────────────────
+
+    async def _handle_save_template(self, name: str, mode: str, instruction: str) -> None:
+        try:
+            templates = self.config.get("templates", [])
+            # Replace if name already exists, otherwise append
+            templates = [t for t in templates if t.get("name") != name]
+            templates.append({"name": name, "mode": mode, "instruction": instruction})
+            save_user_config({"templates": templates})
+            self.config = load_config()
+            emit_templates(templates)
+        except Exception as e:
+            log.exception("Error saving template")
+            emit_error(str(e))
+
+    async def _handle_delete_template(self, name: str) -> None:
+        try:
+            templates = [t for t in self.config.get("templates", []) if t.get("name") != name]
+            save_user_config({"templates": templates})
+            self.config = load_config()
+            emit_templates(templates)
+        except Exception as e:
+            log.exception("Error deleting template")
+            emit_error(str(e))
+
+    # ── Per-mode hotkeys ──────────────────────────────────────────────────────
+
+    def _register_mode_hotkeys(self) -> None:
+        """Register optional per-mode hotkeys from config."""
+        for mode_id, mode_cfg in self.modes.items():
+            hk = mode_cfg.get("hotkey")
+            if not hk:
+                continue
+            try:
+                def make_handler(m):
+                    def handler():
+                        asyncio.run_coroutine_threadsafe(
+                            self._handle_mode_direct(m), self._loop
+                        )
+                    return handler
+                self.backends["hotkey"].register(hk, make_handler(mode_id))
+                log.info("Registered per-mode hotkey %s → %s", hk, mode_id)
+            except Exception as e:
+                log.warning("Could not register hotkey %s for mode %s: %s", hk, mode_id, e)
+
+    async def _handle_mode_direct(self, mode: str) -> None:
+        """Run a mode directly (triggered by per-mode hotkey) on selected text."""
+        try:
+            text = self.backends["capture"].get_selected_text()
+            if not text or not text.strip():
+                return
+            self._last_text = text.strip()
+            context = self.backends["context"].get_active_context()
+            emit_smart_suggestion(mode, f"Running {mode} via hotkey")
+            emit_show_overlay(
+                text=self._last_text,
+                context=context,
+                modes=_modes_list(self.modes),
+                chains=_chains_list(self.chains),
+            )
+            await self._handle_mode_selected(mode)
+        except Exception as e:
+            log.exception("Error in direct mode hotkey")
+            emit_error(str(e))
+
     # ── Command loop ──────────────────────────────────────────────────────────
 
     async def _command_loop(self) -> None:
@@ -337,8 +485,32 @@ class QuillApp:
                     limit=cmd.get("limit", 30),
                     language=cmd.get("language"),
                 )
+            elif t == "toggle_favorite":
+                await self._handle_toggle_favorite(cmd.get("entry_id", 0))
+            elif t == "export_history":
+                await self._handle_export_history(cmd.get("format", "json"))
+            elif t == "compare_modes":
+                await self._handle_compare_modes(
+                    cmd.get("mode_a", "rewrite"),
+                    cmd.get("mode_b", "formal"),
+                    language=cmd.get("language"),
+                    extra_instruction=cmd.get("extra_instruction", ""),
+                )
+            elif t == "get_pronunciation":
+                await self._handle_get_pronunciation(
+                    cmd.get("text", self._last_result),
+                    cmd.get("language", self._last_language),
+                )
+            elif t == "save_template":
+                await self._handle_save_template(
+                    cmd.get("name", ""), cmd.get("mode", ""), cmd.get("instruction", "")
+                )
+            elif t == "delete_template":
+                await self._handle_delete_template(cmd.get("name", ""))
             elif t == "ping":
                 emit_ready()
+                # Also emit current templates on ping so UI stays in sync
+                emit_templates(self.config.get("templates", []))
             elif t == "save_config":
                 save_user_config(cmd.get("config", {}))
                 self.config = load_config()
@@ -370,10 +542,26 @@ class QuillApp:
             else:
                 raise
 
-        # Register hotkey
+        # Register main hotkey
         hotkey = self.config.get("hotkey", "ctrl+shift+space")
         self.backends["hotkey"].register(hotkey, self._on_hotkey)
         log.info("Quill ready. Hotkey: %s", hotkey)
+
+        # Register per-mode hotkeys (optional)
+        self._register_mode_hotkeys()
+
+        # Start clipboard monitor as a background task (opt-in)
+        clipboard_cfg = self.config.get("clipboard_monitor", {})
+        if clipboard_cfg.get("enabled"):
+            from .clipboard_monitor import run_clipboard_monitor
+            asyncio.ensure_future(
+                run_clipboard_monitor(
+                    get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
+                    emit_fn=emit_clipboard_change,
+                )
+            )
+            log.info("Clipboard monitor started.")
+
         emit_ready()
 
         try:
