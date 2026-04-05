@@ -41,11 +41,10 @@ async def run_clipboard_monitor(get_enabled: callable, emit_fn: callable) -> Non
         except Exception:
             continue
 
-        if current != last_text and len(current.split()) >= _MIN_WORDS:
+        if current != last_text:
             last_text = current
-            try:
-                emit_fn(current)
-            except Exception as e:
-                log.debug("clipboard emit error: %s", e)
-
-        last_text = current
+            if len(current.split()) >= _MIN_WORDS:
+                try:
+                    emit_fn(current)
+                except Exception as e:
+                    log.debug("clipboard emit error: %s", e)

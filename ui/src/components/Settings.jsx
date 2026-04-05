@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "../styles/settings.css";
 
 const PROVIDERS = [
@@ -47,8 +47,8 @@ function ToneSelector({ value, onChange }) {
 
 // ── Templates management ───────────────────────────────────────────────────────
 
-function TemplatesEditor({ bridge }) {
-  const [templates, setTemplates] = useState(bridge?.templates || []);
+// Receives templates as a prop so it re-renders when the parent state updates
+function TemplatesEditor({ templates, onSave, onDelete }) {
   const [name, setName]           = useState("");
   const [mode, setMode]           = useState("rewrite");
   const [instruction, setInstruction] = useState("");
@@ -58,17 +58,16 @@ function TemplatesEditor({ bridge }) {
 
   const handleAdd = async () => {
     if (!name.trim()) return;
-    await bridge.saveTemplate(name.trim(), mode, instruction.trim());
+    await onSave(name.trim(), mode, instruction.trim());
     setName(""); setInstruction("");
     setSaved(true); setTimeout(() => setSaved(false), 1500);
   };
 
   const handleDelete = async (tplName) => {
-    await bridge.deleteTemplate(tplName);
+    await onDelete(tplName);
   };
 
-  // Sync when bridge updates templates
-  const currentTemplates = bridge?.templates || [];
+  const currentTemplates = templates || [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -130,6 +129,11 @@ function TemplatesEditor({ bridge }) {
 export default function Settings({ onClose, bridge }) {
   const [saved, setSaved]   = useState(false);
   const [activeTab, setActiveTab] = useState("provider");
+  // Templates state — initialized from bridge and updated when bridge.templates changes
+  const [templates, setTemplates] = useState(bridge?.templates || []);
+  useEffect(() => {
+    setTemplates(bridge?.templates || []);
+  }, [bridge?.templates]);
 
   const stored = (() => {
     try { return JSON.parse(localStorage.getItem("quill_config_pending") || "{}"); }
@@ -448,7 +452,11 @@ export default function Settings({ onClose, bridge }) {
               Quick templates combine a mode + instruction into a one-click button shown in the overlay.
               Use them for repeat tasks like "Slack update" or "Client email".
             </div>
-            <TemplatesEditor bridge={bridge} />
+            <TemplatesEditor
+              templates={templates}
+              onSave={bridge?.saveTemplate}
+              onDelete={bridge?.deleteTemplate}
+            />
           </div>
         )}
 

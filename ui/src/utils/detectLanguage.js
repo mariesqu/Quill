@@ -5,19 +5,6 @@
  * Returns a language name string or null (likely English / unknown).
  */
 
-// Non-Latin script ranges — unambiguous when enough characters match
-const SCRIPTS = [
-  { name: "Arabic",      start: 0x0600, end: 0x06FF },
-  { name: "Chinese",     start: 0x4E00, end: 0x9FFF },
-  { name: "Japanese",    start: 0x3040, end: 0x30FF },
-  { name: "Korean",      start: 0xAC00, end: 0xD7A3 },
-  { name: "Russian",     start: 0x0400, end: 0x04FF },
-  { name: "Greek",       start: 0x0370, end: 0x03FF },
-  { name: "Hebrew",      start: 0x0590, end: 0x05FF },
-  { name: "Thai",        start: 0x0E00, end: 0x0E7F },
-  { name: "Hindi",       start: 0x0900, end: 0x097F },
-];
-
 // High-frequency function words per language (Latin scripts)
 const WORD_SIGNATURES = {
   French:     ["le","la","les","de","du","un","une","des","je","tu","vous","nous","est","sont","avec","pour","dans","sur","pas","ne","au"],
@@ -30,24 +17,50 @@ const WORD_SIGNATURES = {
 };
 
 /**
+ * Count characters in a Unicode range.
+ */
+function countInRange(chars, start, end) {
+  return chars.filter((c) => {
+    const cp = c.codePointAt(0);
+    return cp >= start && cp <= end;
+  }).length;
+}
+
+/**
  * Detect the language of the given text.
  * Returns a language name (e.g. "French") or null if uncertain / likely English.
  */
 export function detectLanguage(text) {
   if (!text || text.trim().length < 15) return null;
 
-  // 1. Check non-Latin scripts first — these are unambiguous
   const chars = [...text];
-  for (const script of SCRIPTS) {
-    const count = chars.filter((c) => {
-      const cp = c.codePointAt(0);
-      return cp >= script.start && cp <= script.end;
-    }).length;
-    // >15% of characters from a single script → confident detection
-    if (count / chars.length > 0.15) return script.name;
+  const total = chars.length;
+
+  // 1. Japanese — check for Hiragana/Katakana FIRST (before CJK, to avoid Chinese overlap)
+  //    Hiragana: 0x3040–0x309F | Katakana: 0x30A0–0x30FF
+  const hiraganaCount  = countInRange(chars, 0x3040, 0x309F);
+  const katakanaCount  = countInRange(chars, 0x30A0, 0x30FF);
+  if ((hiraganaCount + katakanaCount) / total > 0.08) return "Japanese";
+
+  // 2. Chinese — CJK Unified Ideographs (no Hiragana/Katakana present from step 1)
+  const cjkCount = countInRange(chars, 0x4E00, 0x9FFF);
+  if (cjkCount / total > 0.15) return "Chinese";
+
+  // 3. Other unambiguous scripts
+  const UNAMBIGUOUS = [
+    { name: "Korean",  start: 0xAC00, end: 0xD7A3 },
+    { name: "Arabic",  start: 0x0600, end: 0x06FF },
+    { name: "Russian", start: 0x0400, end: 0x04FF },
+    { name: "Greek",   start: 0x0370, end: 0x03FF },
+    { name: "Hebrew",  start: 0x0590, end: 0x05FF },
+    { name: "Thai",    start: 0x0E00, end: 0x0E7F },
+    { name: "Hindi",   start: 0x0900, end: 0x097F },
+  ];
+  for (const script of UNAMBIGUOUS) {
+    if (countInRange(chars, script.start, script.end) / total > 0.15) return script.name;
   }
 
-  // 2. Latin-script word matching
+  // 4. Latin-script word matching
   const words = text.toLowerCase().match(/\b[a-zàáâãäåæçèéêëìíîïðñòóôõöùúûüý]+\b/g) || [];
   if (words.length < 4) return null;
 
@@ -56,8 +69,7 @@ export function detectLanguage(text) {
 
   for (const [lang, signature] of Object.entries(WORD_SIGNATURES)) {
     const sigSet = new Set(signature);
-    const matches = words.filter((w) => sigSet.has(w)).length;
-    const score   = matches / words.length;
+    const score  = words.filter((w) => sigSet.has(w)).length / words.length;
     if (score > bestScore && score > 0.07) {
       bestScore = score;
       bestLang  = lang;
