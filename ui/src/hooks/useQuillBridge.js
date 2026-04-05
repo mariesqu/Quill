@@ -199,6 +199,7 @@ export function useQuillBridge() {
     listen("quill://comparison_done", (e) => {
       setComparisonResult(e.payload);
       setIsComparing(false);
+      setIsDone(true);
     }).then((fn) => unsubs.push(fn));
 
     listen("quill://pronunciation", (e) => {
@@ -267,13 +268,15 @@ export function useQuillBridge() {
     await sendToPython({ type: "retry", extra_instruction: extraInstruction });
   }, []);
 
-  const undo = useCallback(() => {
+  const undo = useCallback(async () => {
     if (outputStack.current.length < 2) return;
     outputStack.current = outputStack.current.slice(1);
     const prev = outputStack.current[0];
     setStreamedText(prev.text);
     setIsDone(true);
     setCanUndo(outputStack.current.length > 1);
+    // Sync the undone text back to Python so replace_confirmed pastes the correct version
+    await sendToPython({ type: "set_result", text: prev.text });
   }, []);
 
   const compareModes = useCallback(async (modeA, modeB, extraInstruction = "") => {
