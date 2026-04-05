@@ -18,6 +18,11 @@ Works with any AI model — cloud or fully local. Free and open-source (MIT).
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [My Voice (Persona)](#my-voice-persona)
 - [AI Tutor](#ai-tutor)
+- [Favorites & Export](#favorites--export)
+- [Compare Modes](#compare-modes)
+- [Templates](#templates)
+- [Clipboard Monitor](#clipboard-monitor)
+- [Light & Dark Theme](#light--dark-theme)
 - [AI Providers](#ai-providers)
 - [Configuration Reference](#configuration-reference)
 - [Custom Modes & Chains](#custom-modes--chains)
@@ -144,9 +149,22 @@ All shortcuts work when the overlay is focused.
 |---|---|
 | `1` – `7` | Trigger mode by index (shown in button tooltips) |
 | `r` | Retry — re-run the last mode with a new generation |
+| `z` | Undo — step back to the previous result |
 | `Esc` | Dismiss the overlay |
 | `⊞` (button) | Toggle diff view on/off |
 | `↻` (button) | Same as `r` — retry |
+
+### Per-mode hotkeys (optional)
+
+Assign a global hotkey to any individual mode so you can trigger it without opening the overlay:
+
+```yaml
+mode_hotkeys:
+  rewrite: ctrl+shift+1
+  formal:  ctrl+shift+5
+```
+
+When triggered, Quill reads the selected text, runs the mode, and shows the result ready for Replace — no overlay interaction required.
 
 ### One-off Instruction
 
@@ -258,6 +276,67 @@ All history is stored **locally** in `~/.quill/history.db`. Nothing is sent anyw
 
 ---
 
+## Favorites & Export
+
+Star any history entry to mark it as a favorite. In the Tutor panel, switch to the **Favorites** filter to see only your starred transformations.
+
+**Exporting your history:**
+
+1. Open the Tutor panel (🎓 icon or tray → AI Tutor…)
+2. Click **⬇ Export**
+3. Choose **JSON** (full metadata) or **CSV** (spreadsheet-friendly)
+
+The downloaded file contains all entries (or just your favorites if the filter is active). Everything stays on your machine — the export is a local browser download.
+
+---
+
+## Compare Modes
+
+Compare how two different modes transform the same text, side by side.
+
+1. After generating a result, click **⚖ Compare** in the action bar
+2. Pick a second mode from the dropdown
+3. Both results appear in a two-column view
+4. Click **Use this** under either result to select it for Replace / Copy
+
+Useful for deciding between a shorter vs formal rewrite, or comparing two custom modes before committing.
+
+---
+
+## Templates
+
+Save frequently used one-off instructions as named templates so you don't have to retype them.
+
+**Managing templates:**
+
+- Open **Settings → Templates**
+- Click **+ New template**, give it a name and instruction text, then save
+- In the overlay, click **✍️ Add instruction…** and pick a saved template from the dropdown
+
+Templates are stored in `config/user.yaml` and sync across sessions instantly.
+
+---
+
+## Clipboard Monitor
+
+When enabled, Quill watches your clipboard in the background. When you copy text that is long enough (≥ 3 words by default), the overlay appears automatically — no hotkey needed.
+
+**Enable in Settings → Behaviour → Clipboard monitor.**
+
+This is opt-in and disabled by default. It is useful for workflows where you copy text frequently (research, translation, editing).
+
+The monitor respects the `get_enabled` flag in real time — toggling the setting in the UI takes effect immediately without restarting.
+
+---
+
+## Light & Dark Theme
+
+Quill defaults to a dark glassmorphism style. To switch to the light theme, open **Settings → Appearance** and toggle the theme switch.
+
+The choice is remembered across sessions via localStorage.
+
+---
+
 ## AI Providers
 
 Quill works with any OpenAI-compatible API. Configure in `config/user.yaml` or via **Settings → AI Provider**.
@@ -330,6 +409,21 @@ history:
 tutor:
   enabled: false              # requires history.enabled: true
   auto_explain: false         # automatically explain every transformation
+
+# ── Clipboard Monitor ─────────────────────────────────────────────────────────
+clipboard_monitor:
+  enabled: false              # auto-show overlay when clipboard text changes
+  min_words: 3                # minimum word count to trigger
+
+# ── Templates ─────────────────────────────────────────────────────────────────
+templates: []                 # managed via Settings → Templates UI
+# - name: "Make urgent"
+#   instruction: "Rewrite with a strong sense of urgency and a clear call to action."
+
+# ── Per-mode hotkeys (optional) ───────────────────────────────────────────────
+# mode_hotkeys:
+#   rewrite: ctrl+shift+1
+#   formal:  ctrl+shift+5
 
 # ── Context-aware overrides (optional) ───────────────────────────────────────
 # context:
@@ -521,8 +615,8 @@ Global hotkeys and window focus detection are fundamentally restricted on Waylan
                          │ JSON over stdio (sidecar IPC)
 ┌────────────────────────▼────────────────────────┐
 │         Overlay UI (Tauri v2 + React)           │
-│  Overlay · DiffView · TutorPanel · Settings     │
-│  FirstRun wizard · PermissionPrompt             │
+│  Overlay · DiffView · ComparisonView            │
+│  TutorPanel · Settings · FirstRun wizard        │
 └─────────────────────────────────────────────────┘
 ```
 
