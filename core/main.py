@@ -515,12 +515,25 @@ class QuillApp:
                 # Also emit current templates on ping so UI stays in sync
                 emit_templates(self.config.get("templates", []))
             elif t == "save_config":
+                prev_clipboard_enabled = self.config.get("clipboard_monitor", {}).get("enabled", False)
                 save_user_config(cmd.get("config", {}))
                 self.config = load_config()
                 self.modes, self.chains = load_modes()
                 if self._history_enabled():
                     from .history import init_db
                     init_db()
+                # Start clipboard monitor if it was just enabled and not already running
+                new_clipboard_enabled = self.config.get("clipboard_monitor", {}).get("enabled", False)
+                if new_clipboard_enabled and not prev_clipboard_enabled and not self._clipboard_monitor_running:
+                    from .clipboard_monitor import run_clipboard_monitor
+                    self._clipboard_monitor_running = True
+                    asyncio.ensure_future(
+                        run_clipboard_monitor(
+                            get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
+                            emit_fn=emit_clipboard_change,
+                        )
+                    )
+                    log.info("Clipboard monitor started (enabled via settings).")
             else:
                 log.warning("Unknown command: %s", t)
 
@@ -554,9 +567,11 @@ class QuillApp:
         self._register_mode_hotkeys()
 
         # Start clipboard monitor as a background task (opt-in)
+        self._clipboard_monitor_running = False
         clipboard_cfg = self.config.get("clipboard_monitor", {})
         if clipboard_cfg.get("enabled"):
             from .clipboard_monitor import run_clipboard_monitor
+            self._clipboard_monitor_running = True
             asyncio.ensure_future(
                 run_clipboard_monitor(
                     get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
@@ -566,6 +581,8 @@ class QuillApp:
             log.info("Clipboard monitor started.")
 
         emit_ready()
+        # Emit persisted templates on startup so the UI can render them immediately
+        emit_templates(self.config.get("templates", []))
 
         try:
             await self._command_loop()
