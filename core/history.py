@@ -40,12 +40,14 @@ def init_db() -> None:
                 output_text       TEXT NOT NULL,
                 word_count_before INTEGER,
                 word_count_after  INTEGER,
-                tutor_explanation TEXT
+                tutor_explanation TEXT,
+                favorited         INTEGER DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_history_ts   ON history(timestamp);
             CREATE INDEX IF NOT EXISTS idx_history_mode ON history(mode);
             CREATE INDEX IF NOT EXISTS idx_history_lang ON history(language);
+            CREATE INDEX IF NOT EXISTS idx_history_fav  ON history(favorited);
 
             CREATE TABLE IF NOT EXISTS tutor_lessons (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,6 +59,11 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_lessons_period ON tutor_lessons(period, created_at);
         """)
+        # Migrate existing databases that predate the favorited column
+        try:
+            conn.execute("ALTER TABLE history ADD COLUMN favorited INTEGER DEFAULT 0")
+        except Exception:
+            pass  # Column already exists
 
 
 def save_entry(
@@ -156,3 +163,30 @@ def get_latest_lesson(period: str) -> dict | None:
             (period,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def toggle_favorite(entry_id: int) -> bool:
+    """Flip the favorited flag for an entry. Returns the new favorited state."""
+    with _get_conn() as conn:
+        row = conn.execute("SELECT favorited FROM history WHERE id = ?", (entry_id,)).fetchone()
+        if not row:
+            return False
+        new_val = 0 if row["favorited"] else 1
+        conn.execute("UPDATE history SET favorited = ? WHERE id = ?", (new_val, entry_id))
+        return bool(new_val)
+
+
+def get_favorites(limit: int = 100) -> list[dict]:
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM history WHERE favorited = 1 ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_entries() -> list[dict]:
+    """Return all history entries for export."""
+    with _get_conn() as conn:
+        rows = conn.execute("SELECT * FROM history ORDER BY timestamp DESC").fetchall()
+    return [dict(r) for r in rows]

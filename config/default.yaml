@@ -30,6 +30,21 @@ tutor:
   auto_explain: false                # Automatically show explanation after each transformation
   lesson_language: auto              # Focus lessons on this language (auto = most-used)
 
+# ── Clipboard Monitor ────────────────────────────────────────────────────────
+clipboard_monitor:
+  enabled: false                     # opt-in: watch clipboard and offer to transform new text
+
+# ── Quick Templates ───────────────────────────────────────────────────────────
+# Named mode + instruction presets shown as chips in the overlay.
+# templates:
+#   - name: "Slack update"
+#     mode: shorter
+#     instruction: "use bullet points, keep it under 3 lines"
+#   - name: "Professional email"
+#     mode: formal
+#     instruction: "suitable for client communication"
+templates: []
+
 # Context-aware mode overrides (optional)
 # context:
 #   outlook:

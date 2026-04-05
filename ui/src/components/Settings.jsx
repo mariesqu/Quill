@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "../styles/settings.css";
 
 const PROVIDERS = [
@@ -27,9 +27,7 @@ function Toggle({ checked, onChange }) {
   return (
     <label className="toggle">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <div className="toggle-track">
-        <div className="toggle-thumb" />
-      </div>
+      <div className="toggle-track"><div className="toggle-thumb" /></div>
     </label>
   );
 }
@@ -38,12 +36,8 @@ function ToneSelector({ value, onChange }) {
   return (
     <div className="tone-grid">
       {PERSONA_TONES.map((t) => (
-        <button
-          key={t.id}
-          className={`tone-chip ${value === t.id ? "active" : ""}`}
-          onClick={() => onChange(t.id)}
-          title={t.desc}
-        >
+        <button key={t.id} className={`tone-chip ${value === t.id ? "active" : ""}`}
+          onClick={() => onChange(t.id)} title={t.desc}>
           {t.label}
         </button>
       ))}
@@ -51,9 +45,95 @@ function ToneSelector({ value, onChange }) {
   );
 }
 
+// ── Templates management ───────────────────────────────────────────────────────
+
+// Receives templates as a prop so it re-renders when the parent state updates
+function TemplatesEditor({ templates, onSave, onDelete }) {
+  const [name, setName]           = useState("");
+  const [mode, setMode]           = useState("rewrite");
+  const [instruction, setInstruction] = useState("");
+  const [saved, setSaved]         = useState(false);
+
+  const MODES = ["rewrite","translate","coach","shorter","formal","fix_grammar","expand"];
+
+  const handleAdd = async () => {
+    if (!name.trim()) return;
+    await onSave(name.trim(), mode, instruction.trim());
+    setName(""); setInstruction("");
+    setSaved(true); setTimeout(() => setSaved(false), 1500);
+  };
+
+  const handleDelete = async (tplName) => {
+    await onDelete(tplName);
+  };
+
+  const currentTemplates = templates || [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Existing templates */}
+      {currentTemplates.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {currentTemplates.map((tpl) => (
+            <div key={tpl.name} style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 12px",
+              background: "var(--color-surface-2)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>⚡ {tpl.name}</span>
+              <span style={{ fontSize: 11, color: "var(--color-text-dim)" }}>
+                {tpl.mode}{tpl.instruction ? ` · "${tpl.instruction}"` : ""}
+              </span>
+              <button onClick={() => handleDelete(tpl.name)}
+                style={{ background: "none", border: "none",
+                  color: "var(--color-error)", cursor: "pointer", fontSize: 13, padding: "0 4px" }}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add new */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6,
+        padding: "12px", background: "var(--color-surface-2)",
+        border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.08em", color: "var(--color-text-dim)", marginBottom: 2 }}>
+          Add template
+        </div>
+        <input className="settings-input" type="text" placeholder="Template name (e.g. Slack update)"
+          value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} />
+        <div style={{ display: "flex", gap: 6 }}>
+          <select className="settings-select" value={mode} onChange={(e) => setMode(e.target.value)}>
+            {MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <input className="settings-input" type="text"
+            placeholder="Instruction (optional)"
+            value={instruction} onChange={(e) => setInstruction(e.target.value)}
+            style={{ flex: 1 }} />
+        </div>
+        <button className="btn-continue" onClick={handleAdd} disabled={!name.trim()}
+          style={{ alignSelf: "flex-end", padding: "6px 16px" }}>
+          {saved ? "✓ Saved" : "+ Add"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Settings component ────────────────────────────────────────────────────
+
 export default function Settings({ onClose, bridge }) {
-  const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState("provider"); // provider | behaviour | persona | tutor | about
+  const [saved, setSaved]   = useState(false);
+  const [activeTab, setActiveTab] = useState("provider");
+  // Templates state — initialized from bridge and updated when bridge.templates changes
+  const [templates, setTemplates] = useState(bridge?.templates || []);
+  useEffect(() => {
+    setTemplates(bridge?.templates || []);
+  }, [bridge?.templates]);
 
   const stored = (() => {
     try { return JSON.parse(localStorage.getItem("quill_config_pending") || "{}"); }
@@ -62,6 +142,7 @@ export default function Settings({ onClose, bridge }) {
   const storedPersona  = stored.persona  || {};
   const storedHistory  = stored.history  || {};
   const storedTutor    = stored.tutor    || {};
+  const storedClipboard = stored.clipboard_monitor || {};
 
   // Provider
   const [provider, setProvider]   = useState(stored.provider || "openrouter");
@@ -73,6 +154,14 @@ export default function Settings({ onClose, bridge }) {
   const [hotkey, setHotkey]       = useState(stored.hotkey || "");
   const [overlayPos, setOverlayPos] = useState(stored.overlay_position || "near_cursor");
   const [stream, setStream]       = useState(stored.stream !== false);
+  const [clipboardEnabled, setClipboardEnabled] = useState(storedClipboard.enabled ?? false);
+
+  // Theme
+  const [theme, setThemeLocal] = useState(bridge?.theme || "dark");
+  const handleTheme = (t) => {
+    setThemeLocal(t);
+    if (bridge?.setTheme) bridge.setTheme(t);
+  };
 
   // Persona
   const [personaEnabled, setPersonaEnabled] = useState(storedPersona.enabled ?? false);
@@ -81,16 +170,17 @@ export default function Settings({ onClose, bridge }) {
   const [personaAvoid, setPersonaAvoid]     = useState(storedPersona.avoid || "");
 
   // History & Tutor
-  const [historyEnabled, setHistoryEnabled]         = useState(storedHistory.enabled ?? false);
-  const [tutorEnabled, setTutorEnabled]             = useState(storedTutor.enabled ?? false);
-  const [tutorAutoExplain, setTutorAutoExplain]     = useState(storedTutor.auto_explain ?? false);
+  const [historyEnabled, setHistoryEnabled]     = useState(storedHistory.enabled ?? false);
+  const [tutorEnabled, setTutorEnabled]         = useState(storedTutor.enabled ?? false);
+  const [tutorAutoExplain, setTutorAutoExplain] = useState(storedTutor.auto_explain ?? false);
 
   const handleSave = async () => {
     const config = {
       provider, model,
-      history: { enabled: historyEnabled },
-      tutor:   { enabled: tutorEnabled, auto_explain: tutorAutoExplain },
-      overlay_position: overlayPos,
+      history:            { enabled: historyEnabled },
+      tutor:              { enabled: tutorEnabled, auto_explain: tutorAutoExplain },
+      clipboard_monitor:  { enabled: clipboardEnabled },
+      overlay_position:   overlayPos,
       stream,
       persona: {
         enabled: personaEnabled,
@@ -99,9 +189,9 @@ export default function Settings({ onClose, bridge }) {
         avoid:   personaAvoid.trim(),
       },
     };
-    if (apiKey)   config.api_key  = apiKey;
-    if (baseUrl)  config.base_url = baseUrl;
-    if (hotkey)   config.hotkey   = hotkey;
+    if (apiKey)  config.api_key  = apiKey;
+    if (baseUrl) config.base_url = baseUrl;
+    if (hotkey)  config.hotkey   = hotkey;
 
     localStorage.setItem("quill_config_pending", JSON.stringify(config));
     if (bridge?.saveConfig) await bridge.saveConfig(config);
@@ -110,140 +200,152 @@ export default function Settings({ onClose, bridge }) {
   };
 
   const TABS = [
-    { id: "provider",  label: "AI Provider" },
-    { id: "behaviour", label: "Behaviour" },
-    { id: "persona",   label: "My Voice" + (personaEnabled ? " ✦" : "") },
-    { id: "tutor",     label: "AI Tutor" + (tutorEnabled ? " ✦" : "") },
-    { id: "about",     label: "About" },
+    { id: "provider",   label: "AI Provider" },
+    { id: "behaviour",  label: "Behaviour" },
+    { id: "persona",    label: "My Voice" + (personaEnabled ? " ✦" : "") },
+    { id: "tutor",      label: "AI Tutor" + (tutorEnabled ? " ✦" : "") },
+    { id: "templates",  label: "Templates" },
+    { id: "about",      label: "About" },
   ];
 
   return (
     <div className="settings-root">
-      {/* Top bar */}
       <div className="settings-topbar">
         <div className="settings-topbar-title">🪶 Quill — Settings</div>
-        <button className="overlay-close-btn" onClick={onClose} style={{ width: 28, height: 28 }}>
-          ✕
-        </button>
+        <button className="overlay-close-btn" onClick={onClose} style={{ width: 28, height: 28 }}>✕</button>
       </div>
 
-      {/* Tab bar */}
       <div className="settings-tabs">
         {TABS.map((tab) => (
-          <button
-            key={tab.id}
+          <button key={tab.id}
             className={`settings-tab ${activeTab === tab.id ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
+            onClick={() => setActiveTab(tab.id)}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Body */}
       <div className="settings-body">
 
-        {/* ── AI Provider ─────────────────────────────────────────────────── */}
+        {/* ── AI Provider ───────────────────────────────────────────────────── */}
         {activeTab === "provider" && (
-          <>
-            <div className="settings-section">
-              <div className="settings-card">
-                <div className="settings-row">
-                  <div>
-                    <div className="settings-row-label">Provider</div>
-                    <div className="settings-row-desc">Where AI requests are sent</div>
-                  </div>
-                  <select className="settings-select" value={provider} onChange={(e) => setProvider(e.target.value)}>
-                    {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
-                </div>
-
-                <div className="settings-row">
-                  <div>
-                    <div className="settings-row-label">Model</div>
-                    <div className="settings-row-desc">Model name for completions</div>
-                  </div>
-                  <input className="settings-input" type="text" value={model}
-                    onChange={(e) => setModel(e.target.value)} placeholder="e.g. gpt-4o-mini" />
-                </div>
-
-                {["openrouter", "openai"].includes(provider) && (
-                  <div className="settings-row">
-                    <div>
-                      <div className="settings-row-label">API Key</div>
-                      <div className="settings-row-desc">Stored locally, never synced</div>
-                    </div>
-                    <input className="settings-input" type="password" value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
-                  </div>
-                )}
-
-                {["generic", "ollama"].includes(provider) && (
-                  <div className="settings-row">
-                    <div>
-                      <div className="settings-row-label">Base URL</div>
-                      <div className="settings-row-desc">API endpoint URL</div>
-                    </div>
-                    <input className="settings-input" type="text" value={baseUrl}
-                      onChange={(e) => setBaseUrl(e.target.value)}
-                      placeholder={provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"} />
-                  </div>
-                )}
+          <div className="settings-section">
+            <div className="settings-card">
+              <div className="settings-row">
+                <div><div className="settings-row-label">Provider</div>
+                  <div className="settings-row-desc">Where AI requests are sent</div></div>
+                <select className="settings-select" value={provider} onChange={(e) => setProvider(e.target.value)}>
+                  {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
               </div>
+              <div className="settings-row">
+                <div><div className="settings-row-label">Model</div>
+                  <div className="settings-row-desc">Model name for completions</div></div>
+                <input className="settings-input" type="text" value={model}
+                  onChange={(e) => setModel(e.target.value)} placeholder="e.g. gpt-4o-mini" />
+              </div>
+              {["openrouter","openai"].includes(provider) && (
+                <div className="settings-row">
+                  <div><div className="settings-row-label">API Key</div>
+                    <div className="settings-row-desc">Stored locally, never synced</div></div>
+                  <input className="settings-input" type="password" value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
+                </div>
+              )}
+              {["generic","ollama"].includes(provider) && (
+                <div className="settings-row">
+                  <div><div className="settings-row-label">Base URL</div>
+                    <div className="settings-row-desc">API endpoint URL</div></div>
+                  <input className="settings-input" type="text" value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"} />
+                </div>
+              )}
             </div>
-          </>
+          </div>
         )}
 
-        {/* ── Behaviour ───────────────────────────────────────────────────── */}
+        {/* ── Behaviour ─────────────────────────────────────────────────────── */}
         {activeTab === "behaviour" && (
           <div className="settings-section">
             <div className="settings-card">
               <div className="settings-row">
-                <div>
-                  <div className="settings-row-label">Hotkey</div>
-                  <div className="settings-row-desc">Leave empty for OS default</div>
-                </div>
+                <div><div className="settings-row-label">Hotkey</div>
+                  <div className="settings-row-desc">Leave empty for OS default (Ctrl+Shift+Space)</div></div>
                 <input className="settings-input" type="text" value={hotkey}
                   onChange={(e) => setHotkey(e.target.value)} placeholder="ctrl+shift+space" />
               </div>
-
               <div className="settings-row">
                 <div><div className="settings-row-label">Overlay position</div></div>
-                <select className="settings-select" value={overlayPos} onChange={(e) => setOverlayPos(e.target.value)}>
+                <select className="settings-select" value={overlayPos}
+                  onChange={(e) => setOverlayPos(e.target.value)}>
                   {POSITIONS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
               </div>
+              <div className="settings-row">
+                <div><div className="settings-row-label">Stream responses</div>
+                  <div className="settings-row-desc">Show text as it's generated</div></div>
+                <Toggle checked={stream} onChange={setStream} />
+              </div>
+            </div>
 
+            {/* Theme */}
+            <div className="settings-section-title" style={{ marginTop: 8 }}>Appearance</div>
+            <div className="settings-card">
+              <div className="settings-row">
+                <div><div className="settings-row-label">Theme</div>
+                  <div className="settings-row-desc">Dark glass or light surface</div></div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["dark","light"].map((t) => (
+                    <button key={t}
+                      onClick={() => handleTheme(t)}
+                      style={{
+                        padding: "5px 14px",
+                        background: theme === t ? "var(--color-primary-dim)" : "var(--color-surface-2)",
+                        border: `1px solid ${theme === t ? "var(--color-primary-glow)" : "var(--color-border)"}`,
+                        borderRadius: "var(--radius-sm)",
+                        color: theme === t ? "var(--color-primary)" : "var(--color-text-muted)",
+                        fontSize: 12, cursor: "pointer",
+                        textTransform: "capitalize",
+                      }}>
+                      {t === "dark" ? "🌙 Dark" : "☀️ Light"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Clipboard monitor */}
+            <div className="settings-section-title" style={{ marginTop: 8 }}>Clipboard</div>
+            <div className="settings-card">
               <div className="settings-row">
                 <div>
-                  <div className="settings-row-label">Stream responses</div>
-                  <div className="settings-row-desc">Show text as it's generated</div>
+                  <div className="settings-row-label">Clipboard monitor</div>
+                  <div className="settings-row-desc">
+                    Watch for new clipboard text and offer to transform it
+                  </div>
                 </div>
-                <Toggle checked={stream} onChange={setStream} />
+                <Toggle checked={clipboardEnabled} onChange={setClipboardEnabled} />
               </div>
             </div>
           </div>
         )}
 
-        {/* ── My Voice / Persona ──────────────────────────────────────────── */}
+        {/* ── My Voice / Persona ────────────────────────────────────────────── */}
         {activeTab === "persona" && (
           <div className="settings-section">
-            {/* Enable toggle */}
             <div className="settings-card">
               <div className="settings-row">
-                <div>
-                  <div className="settings-row-label">Enable My Voice</div>
+                <div><div className="settings-row-label">Enable My Voice</div>
                   <div className="settings-row-desc">
                     Apply your style to all AI outputs — rewrites, translations, coaching, everything
-                  </div>
-                </div>
+                  </div></div>
                 <Toggle checked={personaEnabled} onChange={setPersonaEnabled} />
               </div>
             </div>
 
             {personaEnabled && (
               <>
-                {/* Tone */}
                 <div className="settings-section-title" style={{ marginTop: 8 }}>Tone</div>
                 <div className="settings-card">
                   <div style={{ padding: "14px 16px" }}>
@@ -254,50 +356,34 @@ export default function Settings({ onClose, bridge }) {
                   </div>
                 </div>
 
-                {/* Style notes */}
                 <div className="settings-section-title" style={{ marginTop: 8 }}>Writing style</div>
                 <div className="settings-card">
                   <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
                     <div className="settings-row-desc" style={{ marginBottom: 4 }}>
                       Describe how you write. The AI will mirror your style.
                     </div>
-                    <textarea
-                      className="persona-textarea"
-                      value={personaStyle}
+                    <textarea className="persona-textarea" value={personaStyle}
                       onChange={(e) => setPersonaStyle(e.target.value)}
-                      placeholder={
-                        "e.g. I write in short punchy sentences. I use em-dashes for emphasis. " +
-                        "I avoid jargon and always get to the point quickly."
-                      }
-                      rows={4}
-                    />
+                      placeholder="e.g. I write in short punchy sentences. I use em-dashes for emphasis." rows={4} />
                     <div className="persona-char-hint">
-                      {personaStyle.length > 0
-                        ? `${personaStyle.length} characters`
+                      {personaStyle.length > 0 ? `${personaStyle.length} characters`
                         : "Try describing a sentence structure, rhythm, or vocabulary you prefer."}
                     </div>
                   </div>
                 </div>
 
-                {/* Avoid */}
                 <div className="settings-section-title" style={{ marginTop: 8 }}>Always avoid</div>
                 <div className="settings-card">
-                  <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div className="settings-row-desc" style={{ marginBottom: 4 }}>
+                  <div style={{ padding: "14px 16px" }}>
+                    <div className="settings-row-desc" style={{ marginBottom: 8 }}>
                       Words, phrases, or patterns the AI should never use.
                     </div>
-                    <input
-                      className="settings-input"
-                      type="text"
-                      style={{ width: "100%" }}
-                      value={personaAvoid}
-                      onChange={(e) => setPersonaAvoid(e.target.value)}
-                      placeholder="e.g. passive voice, corporate buzzwords, exclamation marks"
-                    />
+                    <input className="settings-input" type="text" style={{ width: "100%" }}
+                      value={personaAvoid} onChange={(e) => setPersonaAvoid(e.target.value)}
+                      placeholder="e.g. passive voice, corporate buzzwords, exclamation marks" />
                   </div>
                 </div>
 
-                {/* Live preview */}
                 <div className="persona-preview">
                   <div className="persona-preview-label">How this affects prompts</div>
                   <div className="persona-preview-box">
@@ -313,17 +399,15 @@ export default function Settings({ onClose, bridge }) {
           </div>
         )}
 
-        {/* ── AI Tutor ────────────────────────────────────────────────────── */}
+        {/* ── AI Tutor ──────────────────────────────────────────────────────── */}
         {activeTab === "tutor" && (
           <div className="settings-section">
             <div className="settings-card">
               <div className="settings-row">
-                <div>
-                  <div className="settings-row-label">Enable History</div>
+                <div><div className="settings-row-label">Enable History</div>
                   <div className="settings-row-desc">
                     Save all transformations locally in ~/.quill/history.db (opt-in)
-                  </div>
-                </div>
+                  </div></div>
                 <Toggle checked={historyEnabled} onChange={setHistoryEnabled} />
               </div>
             </div>
@@ -331,22 +415,18 @@ export default function Settings({ onClose, bridge }) {
             {historyEnabled && (
               <div className="settings-card">
                 <div className="settings-row">
-                  <div>
-                    <div className="settings-row-label">Enable AI Tutor</div>
+                  <div><div className="settings-row-label">Enable AI Tutor</div>
                     <div className="settings-row-desc">
-                      Generate personalised lessons and explain changes using your history
-                    </div>
-                  </div>
+                      Generate lessons and explain changes using your history
+                    </div></div>
                   <Toggle checked={tutorEnabled} onChange={setTutorEnabled} />
                 </div>
                 {tutorEnabled && (
                   <div className="settings-row">
-                    <div>
-                      <div className="settings-row-label">Auto-explain changes</div>
+                    <div><div className="settings-row-label">Auto-explain changes</div>
                       <div className="settings-row-desc">
                         Automatically show tutor insight after every transformation
-                      </div>
-                    </div>
+                      </div></div>
                     <Toggle checked={tutorAutoExplain} onChange={setTutorAutoExplain} />
                   </div>
                 )}
@@ -365,7 +445,22 @@ export default function Settings({ onClose, bridge }) {
           </div>
         )}
 
-        {/* ── About ───────────────────────────────────────────────────────── */}
+        {/* ── Templates ─────────────────────────────────────────────────────── */}
+        {activeTab === "templates" && (
+          <div className="settings-section">
+            <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginBottom: 12, lineHeight: 1.6 }}>
+              Quick templates combine a mode + instruction into a one-click button shown in the overlay.
+              Use them for repeat tasks like "Slack update" or "Client email".
+            </div>
+            <TemplatesEditor
+              templates={templates}
+              onSave={bridge?.saveTemplate}
+              onDelete={bridge?.deleteTemplate}
+            />
+          </div>
+        )}
+
+        {/* ── About ─────────────────────────────────────────────────────────── */}
         {activeTab === "about" && (
           <div className="settings-section">
             <div className="settings-card">

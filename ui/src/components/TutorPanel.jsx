@@ -1,7 +1,7 @@
 /**
  * AI Tutor Panel — full-page view with:
  *   Lessons tab  — daily/weekly AI-generated lessons from usage patterns
- *   History tab  — scrollable log of all past transformations with diffs
+ *   History tab  — scrollable log of all past transformations with diffs, favorites, export
  */
 import React, { useState, useEffect, useCallback } from "react";
 import "../styles/tutor.css";
@@ -26,7 +26,6 @@ function renderMarkdown(md) {
 }
 
 function inlineFormat(text) {
-  // **bold** → <strong>, *italic* → <em>, `code` → <code>
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**"))
@@ -56,12 +55,20 @@ function modeLabelFor(mode) {
   return mode || "?";
 }
 
+function triggerDownload(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ── Lesson tab ────────────────────────────────────────────────────────────────
 
 function LessonsTab({ bridge }) {
   const [dailyLesson, setDailyLesson]   = useState(null);
   const [weeklyLesson, setWeeklyLesson] = useState(null);
-  const [loading, setLoading]           = useState(null); // 'daily' | 'weekly' | null
+  const [loading, setLoading]           = useState(null);
 
   const generate = useCallback(async (period) => {
     setLoading(period);
@@ -79,51 +86,35 @@ function LessonsTab({ bridge }) {
 
   return (
     <>
-      {/* Daily */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-          letterSpacing: "0.08em", color: "var(--color-text-dim)" }}>
-          Daily insight
-        </div>
+          letterSpacing: "0.08em", color: "var(--color-text-dim)" }}>Daily insight</div>
         <button className="btn-generate-lesson" onClick={() => generate("daily")}
           disabled={loading === "daily"}>
-          {loading === "daily" ? (
-            <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Generating…</>
-          ) : (
-            <><span>✨</span> Generate today's</>
-          )}
+          {loading === "daily"
+            ? <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Generating…</>
+            : <><span>✨</span> Generate today's</>}
         </button>
       </div>
 
-      {dailyLesson ? (
-        <LessonCard lesson={dailyLesson} period="daily" />
-      ) : (
-        <EmptyLesson period="daily" onGenerate={() => generate("daily")} loading={loading === "daily"} />
-      )}
+      {dailyLesson ? <LessonCard lesson={dailyLesson} period="daily" />
+        : <EmptyLesson period="daily" loading={loading === "daily"} />}
 
-      {/* Weekly */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-          letterSpacing: "0.08em", color: "var(--color-text-dim)" }}>
-          Weekly review
-        </div>
+          letterSpacing: "0.08em", color: "var(--color-text-dim)" }}>Weekly review</div>
         <button className="btn-generate-lesson" onClick={() => generate("weekly")}
           disabled={loading === "weekly"}
           style={{ background: "linear-gradient(135deg,#0ea5e9,#38bdf8)",
             boxShadow: "0 4px 12px rgba(14,165,233,0.3)" }}>
-          {loading === "weekly" ? (
-            <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Generating…</>
-          ) : (
-            <><span>📅</span> This week's review</>
-          )}
+          {loading === "weekly"
+            ? <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Generating…</>
+            : <><span>📅</span> This week's review</>}
         </button>
       </div>
 
-      {weeklyLesson ? (
-        <LessonCard lesson={weeklyLesson} period="weekly" />
-      ) : (
-        <EmptyLesson period="weekly" onGenerate={() => generate("weekly")} loading={loading === "weekly"} />
-      )}
+      {weeklyLesson ? <LessonCard lesson={weeklyLesson} period="weekly" />
+        : <EmptyLesson period="weekly" loading={loading === "weekly"} />}
     </>
   );
 }
@@ -132,22 +123,16 @@ function LessonCard({ lesson, period }) {
   return (
     <div className="lesson-card">
       <div className="lesson-card-header">
-        <div className="lesson-card-title">
-          {period === "daily" ? "📝" : "📅"} Your {period} insight
-        </div>
+        <div className="lesson-card-title">{period === "daily" ? "📝" : "📅"} Your {period} insight</div>
         <span className="lesson-period-badge">{period}</span>
       </div>
-      <div className="lesson-card-body">
-        {renderMarkdown(lesson)}
-      </div>
-      <div className="lesson-card-footer">
-        Generated just now · Based on your Quill usage
-      </div>
+      <div className="lesson-card-body">{renderMarkdown(lesson)}</div>
+      <div className="lesson-card-footer">Generated just now · Based on your Quill usage</div>
     </div>
   );
 }
 
-function EmptyLesson({ period, onGenerate, loading }) {
+function EmptyLesson({ period }) {
   return (
     <div className="history-empty" style={{ padding: "24px", background: "var(--color-surface-2)",
       border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)" }}>
@@ -163,15 +148,31 @@ function EmptyLesson({ period, onGenerate, loading }) {
 // ── History tab ───────────────────────────────────────────────────────────────
 
 function HistoryTab({ bridge }) {
-  const [entries, setEntries]       = useState([]);
-  const [expanded, setExpanded]     = useState(null);
-  const [showDiff, setShowDiff]     = useState({});
-  const [explaining, setExplaining] = useState(null);
+  const [entries, setEntries]           = useState([]);
+  const [expanded, setExpanded]         = useState(null);
+  const [showDiff, setShowDiff]         = useState({});
+  const [explaining, setExplaining]     = useState(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [exportFmt, setExportFmt]       = useState("json");
+  const [exporting, setExporting]       = useState(false);
 
   useEffect(() => {
-    bridge.getHistory(50);
-    const unsub = bridge.onHistory((e) => setEntries(e));
-    return unsub;
+    bridge.getHistory(100);
+
+    const unsubHistory = bridge.onHistory((newEntries, favoriteUpdate) => {
+      if (newEntries !== null) {
+        setEntries(newEntries);
+      } else if (favoriteUpdate) {
+        setEntries((prev) =>
+          prev.map((e) => e.id === favoriteUpdate.entry_id
+            ? { ...e, favorited: favoriteUpdate.favorited ? 1 : 0 }
+            : e
+          )
+        );
+      }
+    });
+
+    return unsubHistory;
   }, [bridge]);
 
   useEffect(() => {
@@ -184,10 +185,32 @@ function HistoryTab({ bridge }) {
     return unsub;
   }, [bridge]);
 
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    await bridge.exportHistory(exportFmt);
+  }, [bridge, exportFmt]);
+
+  useEffect(() => {
+    const unsub = bridge.onExportData((data, fmt) => {
+      setExporting(false);
+      const ts = new Date().toISOString().slice(0, 10);
+      if (fmt === "csv") {
+        const headers = ["id","timestamp","mode","language","original_text","output_text","favorited"];
+        const rows = data.map((e) => headers.map((h) => JSON.stringify(e[h] ?? "")).join(","));
+        triggerDownload([headers.join(","), ...rows].join("\n"), `quill-history-${ts}.csv`, "text/csv");
+      } else {
+        triggerDownload(JSON.stringify(data, null, 2), `quill-history-${ts}.json`, "application/json");
+      }
+    });
+    return unsub;
+  }, [bridge]);
+
   const requestExplain = async (entry) => {
     setExplaining(entry.id);
     await bridge.tutorExplain(entry.id);
   };
+
+  const displayed = favoritesOnly ? entries.filter((e) => e.favorited) : entries;
 
   if (entries.length === 0) {
     return (
@@ -195,79 +218,120 @@ function HistoryTab({ bridge }) {
         <span style={{ fontSize: 32 }}>📜</span>
         <span>No history yet</span>
         <span style={{ fontSize: 12, opacity: 0.6 }}>
-          Enable history in Settings → My Voice → History, then start transforming text.
+          Enable history in Settings → AI Tutor, then start transforming text.
         </span>
       </div>
     );
   }
 
   return (
-    <div className="history-list">
-      {entries.map((entry) => (
-        <div key={entry.id} className="history-entry">
-          <div className="history-entry-header"
-            onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>
-            <span className="history-mode-badge">{modeLabelFor(entry.mode)}</span>
-            {entry.language && entry.language !== "auto" && (
-              <span className="history-lang-badge">→ {entry.language}</span>
+    <>
+      {/* Toolbar */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "0 0 12px", flexWrap: "wrap" }}>
+        <button
+          onClick={() => setFavoritesOnly((v) => !v)}
+          style={{
+            padding: "5px 12px",
+            background: favoritesOnly ? "rgba(251,191,36,0.15)" : "var(--color-surface-2)",
+            border: `1px solid ${favoritesOnly ? "rgba(251,191,36,0.5)" : "var(--color-border)"}`,
+            borderRadius: "var(--radius-sm)",
+            color: favoritesOnly ? "#fbbf24" : "var(--color-text-muted)",
+            fontSize: 12, cursor: "pointer",
+          }}
+        >
+          {favoritesOnly ? "★ Favorites" : "☆ All"}
+        </button>
+        <div style={{ flex: 1 }} />
+        <select value={exportFmt} onChange={(e) => setExportFmt(e.target.value)}
+          style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-sm)", color: "var(--color-text-muted)",
+            fontSize: 11, padding: "4px 8px" }}>
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+        </select>
+        <button onClick={handleExport} disabled={exporting}
+          style={{ padding: "5px 12px", background: "var(--color-surface-2)",
+            border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)",
+            color: "var(--color-text-muted)", fontSize: 12, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 4 }}>
+          {exporting ? "⟳" : "↓"} Export
+        </button>
+      </div>
+
+      <div className="history-list">
+        {displayed.map((entry) => (
+          <div key={entry.id} className="history-entry">
+            <div className="history-entry-header"
+              onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>
+              <span className="history-mode-badge">{modeLabelFor(entry.mode)}</span>
+              {entry.language && entry.language !== "auto" && (
+                <span className="history-lang-badge">→ {entry.language}</span>
+              )}
+              {entry.app_hint && (
+                <span style={{ fontSize: 11, color: "var(--color-text-dim)" }}>{entry.app_hint}</span>
+              )}
+              {entry.favorited ? <span title="Favorited" style={{ fontSize: 13 }}>★</span> : null}
+              <span className="history-ts">{formatTs(entry.timestamp)}</span>
+              <span style={{ fontSize: 11, color: "var(--color-text-dim)", marginLeft: 4 }}>
+                {expanded === entry.id ? "▲" : "▼"}
+              </span>
+            </div>
+
+            {expanded === entry.id && (
+              <>
+                <div className="history-entry-texts">
+                  <div className="history-col">
+                    <div className="history-col-label">Original</div>
+                    <div className="history-col-text">{entry.original_text}</div>
+                  </div>
+                  <div className="history-col">
+                    <div className="history-col-label">Output</div>
+                    <div className="history-col-text">{entry.output_text}</div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "8px 14px", display: "flex", gap: 8,
+                  borderTop: "1px solid var(--color-border)", flexWrap: "wrap" }}>
+                  <button className="btn-copy"
+                    style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => setShowDiff((s) => ({ ...s, [entry.id]: !s[entry.id] }))}>
+                    {showDiff[entry.id] ? "Hide diff" : "Show diff"}
+                  </button>
+                  <button className="btn-copy"
+                    style={{ fontSize: 11, padding: "4px 10px",
+                      color: "var(--color-primary)", borderColor: "rgba(124,110,247,0.3)" }}
+                    onClick={() => requestExplain(entry)}
+                    disabled={explaining === entry.id}>
+                    {explaining === entry.id ? "⟳ Explaining…"
+                      : entry.tutor_explanation ? "↻ Re-explain" : "💡 Explain changes"}
+                  </button>
+                  <button className="btn-copy"
+                    style={{ fontSize: 11, padding: "4px 10px",
+                      color: entry.favorited ? "#fbbf24" : undefined,
+                      borderColor: entry.favorited ? "rgba(251,191,36,0.4)" : undefined }}
+                    onClick={() => bridge.toggleFavorite(entry.id)}
+                    title={entry.favorited ? "Remove from favorites" : "Save to favorites"}>
+                    {entry.favorited ? "★ Saved" : "☆ Save"}
+                  </button>
+                </div>
+
+                {showDiff[entry.id] && (
+                  <DiffView original={entry.original_text} transformed={entry.output_text} />
+                )}
+
+                {entry.tutor_explanation && (
+                  <div className="history-explanation">
+                    <strong style={{ color: "var(--color-primary)", fontSize: 11 }}>💡 Tutor insight</strong>
+                    <br /><br />
+                    {entry.tutor_explanation}
+                  </div>
+                )}
+              </>
             )}
-            {entry.app_hint && (
-              <span style={{ fontSize: 11, color: "var(--color-text-dim)" }}>{entry.app_hint}</span>
-            )}
-            <span className="history-ts">{formatTs(entry.timestamp)}</span>
-            <span style={{ fontSize: 11, color: "var(--color-text-dim)", marginLeft: 4 }}>
-              {expanded === entry.id ? "▲" : "▼"}
-            </span>
           </div>
-
-          {expanded === entry.id && (
-            <>
-              <div className="history-entry-texts">
-                <div className="history-col">
-                  <div className="history-col-label">Original</div>
-                  <div className="history-col-text">{entry.original_text}</div>
-                </div>
-                <div className="history-col">
-                  <div className="history-col-label">Output</div>
-                  <div className="history-col-text">{entry.output_text}</div>
-                </div>
-              </div>
-
-              {/* Diff toggle */}
-              <div style={{ padding: "8px 14px", display: "flex", gap: 8,
-                borderTop: "1px solid var(--color-border)", flexWrap: "wrap" }}>
-                <button className="btn-copy"
-                  style={{ fontSize: 11, padding: "4px 10px" }}
-                  onClick={() => setShowDiff((s) => ({ ...s, [entry.id]: !s[entry.id] }))}>
-                  {showDiff[entry.id] ? "Hide diff" : "Show diff"}
-                </button>
-                <button className="btn-copy"
-                  style={{ fontSize: 11, padding: "4px 10px",
-                    color: "var(--color-primary)",
-                    borderColor: "rgba(124,110,247,0.3)" }}
-                  onClick={() => requestExplain(entry)}
-                  disabled={explaining === entry.id}>
-                  {explaining === entry.id ? "⟳ Explaining…" :
-                    entry.tutor_explanation ? "↻ Re-explain" : "💡 Explain changes"}
-                </button>
-              </div>
-
-              {showDiff[entry.id] && (
-                <DiffView original={entry.original_text} transformed={entry.output_text} />
-              )}
-
-              {entry.tutor_explanation && (
-                <div className="history-explanation">
-                  <strong style={{ color: "var(--color-primary)", fontSize: 11 }}>💡 Tutor insight</strong>
-                  <br /><br />
-                  {entry.tutor_explanation}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -284,9 +348,7 @@ export default function TutorPanel({ onClose, bridge }) {
   return (
     <div className="tutor-root">
       <div className="tutor-topbar">
-        <div className="tutor-topbar-title">
-          🎓 AI Tutor
-        </div>
+        <div className="tutor-topbar-title">🎓 AI Tutor</div>
         <button className="overlay-close-btn" onClick={onClose}
           style={{ width: 28, height: 28 }}>✕</button>
       </div>
