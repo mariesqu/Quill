@@ -124,6 +124,25 @@ fn relay_message(app: &AppHandle, line: &str) {
         "history" => {
             let _ = app.emit("quill://history", &msg);
         }
+        // ── New features ──────────────────────────────────────────────────────
+        "favorite_toggled" => {
+            let _ = app.emit("quill://favorite_toggled", &msg);
+        }
+        "export_data" => {
+            let _ = app.emit("quill://export_data", &msg);
+        }
+        "comparison_done" => {
+            let _ = app.emit("quill://comparison_done", &msg);
+        }
+        "pronunciation" => {
+            let _ = app.emit("quill://pronunciation", &msg);
+        }
+        "clipboard_change" => {
+            let _ = app.emit("quill://clipboard_change", &msg);
+        }
+        "templates_updated" => {
+            let _ = app.emit("quill://templates_updated", &msg);
+        }
         // ── System ────────────────────────────────────────────────────────────
         "error" => {
             let _ = app.emit("quill://error", &msg);

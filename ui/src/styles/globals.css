@@ -123,3 +123,35 @@ html, body, #root {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Light theme overrides ────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-bg:          #f4f4f8;
+  --color-surface:     rgba(255, 255, 255, 0.95);
+  --color-surface-2:   rgba(242, 242, 248, 0.9);
+  --color-border:      rgba(0, 0, 0, 0.08);
+  --color-border-hover:rgba(0, 0, 0, 0.18);
+
+  --color-text:        #18181c;
+  --color-text-muted:  rgba(24, 24, 28, 0.55);
+  --color-text-dim:    rgba(24, 24, 28, 0.35);
+
+  --color-primary-glow:rgba(124, 110, 247, 0.2);
+  --color-primary-dim: rgba(124, 110, 247, 0.1);
+
+  --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-button:  0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] body,
+[data-theme="light"] #root {
+  background: transparent;
+  color: var(--color-text);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}

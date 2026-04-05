@@ -53,6 +53,32 @@ def emit_smart_suggestion(mode_id: str, reason: str) -> None:
     _emit({"type": "smart_suggestion", "mode_id": mode_id, "reason": reason})
 
 
+def emit_favorite_toggled(entry_id: int, favorited: bool) -> None:
+    _emit({"type": "favorite_toggled", "entry_id": entry_id, "favorited": favorited})
+
+
+def emit_export_data(entries: list[dict], fmt: str) -> None:
+    _emit({"type": "export_data", "entries": entries, "format": fmt})
+
+
+def emit_comparison_done(mode_a: str, result_a: str, mode_b: str, result_b: str) -> None:
+    _emit({"type": "comparison_done",
+           "mode_a": mode_a, "result_a": result_a,
+           "mode_b": mode_b, "result_b": result_b})
+
+
+def emit_pronunciation(text: str) -> None:
+    _emit({"type": "pronunciation", "text": text})
+
+
+def emit_clipboard_change(text: str) -> None:
+    _emit({"type": "clipboard_change", "text": text})
+
+
+def emit_templates(templates: list[dict]) -> None:
+    _emit({"type": "templates_updated", "templates": templates})
+
+
 def emit_error(message: str) -> None:
     _emit({"type": "error", "message": message})
 
