@@ -58,7 +58,8 @@ export function useQuillBridge() {
   }, []);
 
   // ── Undo stack ─────────────────────────────────────────────────────────────
-  const outputStack = useRef([]); // [{text, mode, entryId}]
+  const outputStack  = useRef([]); // [{text, mode, entryId}]
+  const activeModeRef = useRef(null); // mirrors activeMode state for use in event closures
   const [canUndo, setCanUndo] = useState(false);
 
   // ── Tutor state ────────────────────────────────────────────────────────────
@@ -146,8 +147,11 @@ export function useQuillBridge() {
       setIsDone(true);
       setChainProgress(null);
       if (eid) setLastEntryId(eid);
-      // Push to undo stack
-      outputStack.current = [{ text, mode: null, entryId: eid }, ...outputStack.current].slice(0, 20);
+      // Push to undo stack — capture current mode via ref (safe in event closure)
+      outputStack.current = [
+        { text, mode: activeModeRef.current, entryId: eid },
+        ...outputStack.current,
+      ].slice(0, 20);
       setCanUndo(outputStack.current.length > 1);
     }).then((fn) => unsubs.push(fn));
 
@@ -178,12 +182,14 @@ export function useQuillBridge() {
     }).then((fn) => unsubs.push(fn));
 
     listen("quill://history", (e) => {
-      historyListeners.current.forEach((fn) => fn(e.payload.entries));
+      // Call with (entries, null) — consistent two-arg signature
+      historyListeners.current.forEach((fn) => fn(e.payload.entries, null));
     }).then((fn) => unsubs.push(fn));
 
     listen("quill://favorite_toggled", (e) => {
-      // Notify history listeners so TutorPanel can update its list
-      historyListeners.current.forEach((fn) => fn(null, e.payload));
+      const { entry_id, favorited } = e.payload;
+      // Call with (null, {entry_id, favorited}) — history listeners handle both cases
+      historyListeners.current.forEach((fn) => fn(null, { entry_id, favorited }));
     }).then((fn) => unsubs.push(fn));
 
     listen("quill://export_data", (e) => {
@@ -214,6 +220,7 @@ export function useQuillBridge() {
   // ── Overlay actions ────────────────────────────────────────────────────────
 
   const selectMode = useCallback(async (modeId, extraInstruction = "") => {
+    activeModeRef.current = modeId;
     setActiveMode(modeId);
     setStreamedText("");
     setIsStreaming(true);
@@ -232,6 +239,7 @@ export function useQuillBridge() {
   }, [outputLanguage]);
 
   const selectChain = useCallback(async (chainId, extraInstruction = "") => {
+    activeModeRef.current = `chain:${chainId}`;
     setActiveMode(`chain:${chainId}`);
     setStreamedText("");
     setIsStreaming(true);
@@ -285,6 +293,10 @@ export function useQuillBridge() {
     setIsPronouncing(true);
     setPronunciation(null);
     await sendToPython({ type: "get_pronunciation", text, language });
+  }, []);
+
+  const setResultText = useCallback(async (text) => {
+    await sendToPython({ type: "set_result", text });
   }, []);
 
   const confirmReplace = useCallback(async () => {
@@ -406,7 +418,7 @@ export function useQuillBridge() {
     theme, setTheme,
     // Overlay actions
     selectMode, selectChain, retry,
-    confirmReplace, dismiss,
+    setResultText, confirmReplace, dismiss,
     // Tutor actions
     requestTutorExplain, generateLesson,
     getHistory, tutorExplain,

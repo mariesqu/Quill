@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import DiffView from "./DiffView";
 import ComparisonView from "./ComparisonView";
 import { fleschKincaid, gradeLabel } from "../utils/readability";
@@ -341,7 +341,8 @@ function TutorExplainPanel({ explanation, isExplaining, onRequest, isDone }) {
 }
 
 function PronunciationPanel({ pronunciation, isPronouncing, isDone, activeMode, language, onRequest }) {
-  if (!isDone || !activeMode?.includes("translate")) return null;
+  const isTranslateMode = typeof activeMode === "string" && activeMode.includes("translate");
+  if (!isDone || !isTranslateMode) return null;
   if (isPronouncing) {
     return (
       <div className="tutor-explain-loading">
@@ -427,19 +428,23 @@ export default function Overlay({ bridge, onOpenTutor }) {
     templates,
     canUndo, undo,
     selectMode, selectChain, retry,
-    confirmReplace, dismiss, requestTutorExplain,
+    setResultText, confirmReplace, dismiss, requestTutorExplain,
     lastEntryId,
   } = bridge;
 
-  const [copied, setCopied]         = useState(false);
-  const [showDiff, setShowDiff]     = useState(false);
+  const [copied, setCopied]               = useState(false);
+  const [showDiff, setShowDiff]           = useState(false);
   const [extraInstruction, setExtraInstruction] = useState("");
-  const [comparePick, setComparePick] = useState([]); // up to 2 mode ids
+  const [comparePick, setComparePick]     = useState([]); // up to 2 mode ids
+  // When user picks a side in comparison view, store the chosen text locally so
+  // Replace/Copy work correctly without mutating bridge state.
+  const [chosenText, setChosenText]       = useState(null);
 
-  // Reset state when new mode starts
+  // Reset local display state when a new mode starts streaming
   useEffect(() => {
     if (isStreaming) {
       setShowDiff(false);
+      setChosenText(null);
     }
   }, [isStreaming]);
 
@@ -456,9 +461,9 @@ export default function Overlay({ bridge, onOpenTutor }) {
     });
   }, [compareModes, extraInstruction]);
 
-  // Exit compare mode when result arrives
+  // Exit compare mode when result arrives; clear any previous chosen text
   useEffect(() => {
-    if (comparisonResult) setCompareMode(false);
+    if (comparisonResult) { setCompareMode(false); setChosenText(null); }
   }, [comparisonResult, setCompareMode]);
 
   // Handle clipboard toast "Transform" click
@@ -499,13 +504,16 @@ export default function Overlay({ bridge, onOpenTutor }) {
   }, [visible, modes, isStreaming, isDone, extraInstruction, canUndo,
     compareMode, handleComparePick, selectMode, retry, dismiss, undo]);
 
+  // The active output — chosen comparison side takes priority over streamed text
+  const activeText = chosenText ?? streamedText;
+
   const handleCopy = useCallback(() => {
-    if (!streamedText) return;
-    navigator.clipboard.writeText(streamedText).then(() => {
+    if (!activeText) return;
+    navigator.clipboard.writeText(activeText).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [streamedText]);
+  }, [activeText]);
 
   const handleModeSelect = useCallback((modeId) => {
     selectMode(modeId, extraInstruction);
@@ -520,11 +528,10 @@ export default function Overlay({ bridge, onOpenTutor }) {
     selectMode(tpl.mode, tpl.instruction || "");
   }, [selectMode]);
 
+  // User picked a side in comparison view — store locally so Replace/Copy act on it
   const handleComparisonUse = useCallback((text) => {
-    // Set as the current streamed text so Replace works
-    bridge.streamedText = text; // not reactive but sets lastResult in bridge via replace
-    confirmReplace();
-  }, [confirmReplace, bridge]);
+    setChosenText(text);
+  }, []);
 
   // Detected language from selected text
   const detectedLang = selectedText ? detectLanguage(selectedText) : null;
@@ -666,12 +673,17 @@ export default function Overlay({ bridge, onOpenTutor }) {
 
           {/* Action bar */}
           <div className="overlay-actions">
-            <button className="btn-replace" onClick={confirmReplace}
-              disabled={!isDone || !streamedText || !!comparisonResult}>
-              ↩ Replace
+            <button className="btn-replace"
+              onClick={async () => {
+                // If user chose a comparison side, tell Python which result to paste
+                if (chosenText) await setResultText(chosenText);
+                confirmReplace();
+              }}
+              disabled={!isDone || (!activeText) || (!!comparisonResult && !chosenText)}>
+              ↩ Replace{chosenText ? " chosen" : ""}
             </button>
             <button className="btn-copy" onClick={handleCopy}
-              disabled={!streamedText || !!comparisonResult}>
+              disabled={!activeText}>
               {copied ? "✓" : "⎘"}
             </button>
             {isDone && streamedText && !comparisonResult && (

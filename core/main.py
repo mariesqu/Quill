@@ -474,6 +474,9 @@ class QuillApp:
                 )
             elif t == "replace_confirmed":
                 await self._handle_replace_confirmed()
+            elif t == "set_result":
+                # Lets the UI override _last_result (e.g. after picking a comparison side)
+                self._last_result = cmd.get("text", self._last_result)
             elif t == "dismissed":
                 self._last_result = ""
             elif t == "tutor_explain":
