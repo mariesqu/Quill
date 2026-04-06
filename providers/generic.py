@@ -65,6 +65,23 @@ class GenericOpenAIProvider(BaseProvider):
         ).rstrip("/")
         self._api_key = config.get("api_key") or ""
         self._model = config.get("model", "gpt-3.5-turbo")
+        self._custom_headers = self._parse_custom_headers(config.get("custom_headers", ""))
+
+    @staticmethod
+    def _parse_custom_headers(raw: str) -> dict[str, str]:
+        """Parse 'Header-Name: value' lines into a dict."""
+        headers: dict[str, str] = {}
+        if not raw:
+            return headers
+        for line in raw.strip().splitlines():
+            line = line.strip()
+            if ":" in line:
+                key, _, value = line.partition(":")
+                key = key.strip()
+                value = value.strip()
+                if key:
+                    headers[key] = value
+        return headers
 
     def is_available(self) -> bool:
         return bool(self._base_url)
@@ -76,9 +93,14 @@ class GenericOpenAIProvider(BaseProvider):
         messages.append({"role": "user", "content": prompt})
 
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        # Only add Bearer token if an API key is configured
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        # Merge custom headers (can override Authorization for custom auth schemes)
+        if self._custom_headers:
+            headers.update(self._custom_headers)
         payload = {
             "model": self._model,
             "messages": messages,

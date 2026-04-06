@@ -71,7 +71,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 580px;
+  max-width: 600px;
   margin: 0 auto;
   width: 100%;
 }
@@ -122,6 +122,8 @@
   line-height: 1.75;
   color: var(--color-text-muted);
   user-select: text;
+  max-height: 360px;
+  overflow-y: auto;
 }
 
 /* Markdown-like rendering for lesson content */

@@ -154,6 +154,7 @@ export default function Settings({ onClose, bridge }) {
   const [model, setModel]         = useState(stored.model || "google/gemma-3-27b-it");
   const [apiKey, setApiKey]       = useState(stored.api_key || "");
   const [baseUrl, setBaseUrl]     = useState(stored.base_url || "");
+  const [customHeaders, setCustomHeaders] = useState(stored.custom_headers || "");
 
   // Behaviour
   const [hotkey, setHotkey]       = useState(stored.hotkey || "");
@@ -197,6 +198,7 @@ export default function Settings({ onClose, bridge }) {
     if (apiKey)  config.api_key  = apiKey;
     if (baseUrl) config.base_url = baseUrl;
     if (hotkey)  config.hotkey   = hotkey;
+    if (customHeaders.trim()) config.custom_headers = customHeaders.trim();
 
     localStorage.setItem("quill_config_pending", JSON.stringify(config));
     if (bridge?.saveConfig) await bridge.saveConfig(config);
@@ -268,6 +270,16 @@ export default function Settings({ onClose, bridge }) {
                   <input className="settings-input" type="text" value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
                     placeholder={provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"} />
+                </div>
+              )}
+              {provider === "generic" && (
+                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                  <div><div className="settings-row-label">Custom Headers</div>
+                    <div className="settings-row-desc">Extra auth headers — one per line as <code style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>Header-Name: value</code></div></div>
+                  <textarea className="persona-textarea" value={customHeaders}
+                    onChange={(e) => setCustomHeaders(e.target.value)}
+                    placeholder={"X-Client-Id: my-app-id\nX-Client-Secret: my-secret\nAuthorization: Basic dXNlcjpwYXNz"}
+                    style={{ minHeight: 56, fontSize: 12, fontFamily: "var(--font-mono)" }} />
                 </div>
               )}
             </div>

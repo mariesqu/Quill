@@ -6,6 +6,12 @@ model: google/gemma-3-27b-it        # Free tier on OpenRouter
 api_key: null                        # Set via env QUILL_API_KEY or settings UI
 base_url: https://openrouter.ai/api/v1
 
+# Custom headers for API authentication (generic provider only)
+# One header per line: "Header-Name: value"
+# Useful for self-hosted models behind API gateways (Kong, Nginx, Azure APIM)
+# Example: "X-Client-Id: my-app\nX-Client-Secret: my-secret"
+custom_headers: ""
+
 # null = OS-adaptive: Ctrl+Shift+Space on Windows/Linux, Cmd+Shift+Space on macOS
 hotkey: null
 
