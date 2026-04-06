@@ -1,4 +1,5 @@
 """macOS text capture: Accessibility API with Cmd+C clipboard fallback."""
+
 from __future__ import annotations
 
 import logging
@@ -27,8 +28,7 @@ class MacOSCapture(CaptureBackend):
                 'value of attribute "AXSelectedText" of focused UI element'
             )
             result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True, text=True, timeout=1
+                ["osascript", "-e", script], capture_output=True, text=True, timeout=1
             )
             return result.stdout.strip() or None
         except Exception as e:
@@ -39,6 +39,7 @@ class MacOSCapture(CaptureBackend):
         original = ""
         try:
             from pynput import keyboard as kb
+
             original = pyperclip.paste()
             pyperclip.copy("")
             ctrl = kb.Controller()

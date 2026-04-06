@@ -1,4 +1,5 @@
 """macOS global hotkey backend using pynput GlobalHotKeys."""
+
 from __future__ import annotations
 
 import logging
@@ -9,9 +10,33 @@ from .base import HotkeyBackend
 log = logging.getLogger(__name__)
 
 _SPECIAL_KEYS = {
-    "cmd", "ctrl", "alt", "shift", "space", "tab", "esc",
-    "enter", "return", "backspace", "delete", "up", "down", "left", "right",
-    "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+    "cmd",
+    "ctrl",
+    "alt",
+    "shift",
+    "space",
+    "tab",
+    "esc",
+    "enter",
+    "return",
+    "backspace",
+    "delete",
+    "up",
+    "down",
+    "left",
+    "right",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
 }
 
 
@@ -27,6 +52,7 @@ class MacOSHotkey(HotkeyBackend):
 
     def register(self, hotkey: str, callback: Callable) -> None:
         from pynput import keyboard
+
         if self._listener:
             self._listener.stop()
         combo = _to_pynput(hotkey)

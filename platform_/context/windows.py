@@ -1,4 +1,5 @@
 """Windows active app context detection."""
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +13,7 @@ class WindowsContext(ContextBackend):
     def get_active_context(self) -> dict:
         try:
             import pygetwindow as gw
+
             win = gw.getActiveWindow()
             if win and win.title:
                 return lookup_context(win.title)
@@ -21,6 +23,7 @@ class WindowsContext(ContextBackend):
         try:
             import psutil
             import ctypes
+
             hwnd = ctypes.windll.user32.GetForegroundWindow()
             pid = ctypes.c_ulong()
             ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))

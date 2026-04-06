@@ -1,4 +1,5 @@
 """Generic OpenAI-compatible endpoint (LM Studio, Jan.ai, Groq, etc.)"""
+
 from __future__ import annotations
 
 from .generic import GenericOpenAIProvider

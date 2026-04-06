@@ -1,4 +1,5 @@
 """Abstract base for text replacement (paste-back) backends."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

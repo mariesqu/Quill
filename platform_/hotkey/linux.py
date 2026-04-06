@@ -1,4 +1,5 @@
 """Linux global hotkey backend using pynput GlobalHotKeys."""
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +17,7 @@ class LinuxHotkey(HotkeyBackend):
 
     def register(self, hotkey: str, callback: Callable) -> None:
         from pynput import keyboard
+
         if self._listener:
             self._listener.stop()
         combo = _to_pynput(hotkey)

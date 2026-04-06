@@ -1,4 +1,5 @@
 """Tests for core/prompt_builder.py"""
+
 import pytest
 from core.prompt_builder import build_prompt, SYSTEM_BASE
 
@@ -74,6 +75,7 @@ def test_build_prompt_context_hint_included():
 
 # ── Language override ─────────────────────────────────────────────────────────
 
+
 def test_build_prompt_language_french():
     system, _ = build_prompt("test", "rewrite", MODES, CONTEXT_NEUTRAL, language="French")
     assert "French" in system
@@ -133,8 +135,7 @@ def test_persona_none_does_not_crash():
 
 def test_language_and_persona_combined():
     system, _ = build_prompt(
-        "test", "rewrite", MODES, CONTEXT_NEUTRAL,
-        language="Japanese", persona=PERSONA_ENABLED
+        "test", "rewrite", MODES, CONTEXT_NEUTRAL, language="Japanese", persona=PERSONA_ENABLED
     )
     assert "Japanese" in system
     assert "Short punchy sentences" in system

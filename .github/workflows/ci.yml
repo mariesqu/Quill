@@ -89,6 +89,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+      - name: Create dummy sidecar for Tauri validation
+        run: |
+          touch ui/src-tauri/quill-core-x86_64-unknown-linux-gnu
+          chmod +x ui/src-tauri/quill-core-x86_64-unknown-linux-gnu
       - name: Cargo check
         working-directory: ui/src-tauri
         run: cargo check --all-targets

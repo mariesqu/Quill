@@ -1,4 +1,5 @@
 """Linux active app context detection via xdotool + psutil."""
+
 from __future__ import annotations
 
 import logging
@@ -15,7 +16,9 @@ class LinuxContext(ContextBackend):
         try:
             result = subprocess.run(
                 ["xdotool", "getactivewindow", "getwindowname"],
-                capture_output=True, text=True, timeout=1
+                capture_output=True,
+                text=True,
+                timeout=1,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return lookup_context(result.stdout.strip())
@@ -28,10 +31,13 @@ class LinuxContext(ContextBackend):
         try:
             pid_result = subprocess.run(
                 ["xdotool", "getactivewindow", "getwindowpid"],
-                capture_output=True, text=True, timeout=1
+                capture_output=True,
+                text=True,
+                timeout=1,
             )
             if pid_result.returncode == 0:
                 import psutil
+
                 pid = int(pid_result.stdout.strip())
                 proc = psutil.Process(pid)
                 return lookup_context(proc.name())

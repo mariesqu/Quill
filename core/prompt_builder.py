@@ -1,6 +1,7 @@
 """
 Builds prompts from mode templates + app context + persona + output language.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,20 +15,20 @@ SYSTEM_BASE = (
 )
 
 CONTEXT_SYSTEM_ADDITIONS = {
-    "technical":    " The user is working in a technical/code environment. Use technical language where appropriate.",
+    "technical": " The user is working in a technical/code environment. Use technical language where appropriate.",
     "professional": " The user is working in a professional email or business context. Maintain a professional tone.",
-    "casual":       " The user is working in a casual chat context. Keep the tone conversational.",
-    "formal":       " The user is working in a formal document context. Use formal, structured language.",
-    "neutral":      "",
+    "casual": " The user is working in a casual chat context. Keep the tone conversational.",
+    "formal": " The user is working in a formal document context. Use formal, structured language.",
+    "neutral": "",
 }
 
 PERSONA_TONE_DESCRIPTIONS = {
-    "natural":      "",
-    "casual":       "Write in a casual, conversational, friendly tone.",
+    "natural": "",
+    "casual": "Write in a casual, conversational, friendly tone.",
     "professional": "Write in a polished, professional tone suitable for business.",
-    "witty":        "Write with wit and light humour — clever but never forced.",
-    "direct":       "Be extremely direct and concise. No fluff, no filler words.",
-    "warm":         "Write in a warm, empathetic, human tone.",
+    "witty": "Write with wit and light humour — clever but never forced.",
+    "direct": "Be extremely direct and concise. No fluff, no filler words.",
+    "warm": "Write in a warm, empathetic, human tone.",
 }
 
 
@@ -39,6 +40,7 @@ def _build_persona_block(persona: dict[str, Any]) -> str:
     tone = persona.get("tone", "natural")
     if tone not in PERSONA_TONE_DESCRIPTIONS:
         import logging
+
         logging.getLogger("quill.prompt").warning("Unknown persona tone: %s, using natural", tone)
         tone = "natural"
     tone_desc = PERSONA_TONE_DESCRIPTIONS.get(tone, "")
@@ -99,7 +101,9 @@ def build_prompt(
 
     # Prepend any one-off instruction from the user
     if extra_instruction and extra_instruction.strip():
-        mode_instruction = f"Additional instruction: {extra_instruction.strip()}\n\n{mode_instruction}"
+        mode_instruction = (
+            f"Additional instruction: {extra_instruction.strip()}\n\n{mode_instruction}"
+        )
 
     user_prompt = f"{mode_instruction}\n\n---\n{text}"
 
@@ -118,19 +122,19 @@ def build_prompt(
 
 # ── Smart mode suggestion ─────────────────────────────────────────────────────
 
+
 def suggest_mode(text: str, context: dict[str, Any]) -> tuple[str, str]:
     """
     Heuristic-based mode suggestion. Returns (mode_id, reason).
     """
     word_count = len(text.split())
     has_non_ascii = bool(re.search(r"[^\x00-\x7F]", text))
-    lower = text.lower()
 
     # Grammar indicators: multiple punctuation errors, obvious misspellings
     grammar_signals = (
-        text.count("  ") > 1 or          # double spaces
-        re.search(r"\s[,\.;]", text) or   # space before punctuation
-        re.search(r"[a-z]\.[A-Z]", text)  # missing space after period
+        text.count("  ") > 1  # double spaces
+        or re.search(r"\s[,\.;]", text)  # space before punctuation
+        or re.search(r"[a-z]\.[A-Z]", text)  # missing space after period
     )
 
     # Length signals
@@ -144,7 +148,10 @@ def suggest_mode(text: str, context: dict[str, Any]) -> tuple[str, str]:
     if context.get("tone") == "casual" and word_count > 30:
         return "shorter", "Chat messages land better when concise"
 
-    if context.get("hint") in ("email", "document") and context.get("tone") in ("professional", "formal"):
+    if context.get("hint") in ("email", "document") and context.get("tone") in (
+        "professional",
+        "formal",
+    ):
         return "formal", "You're in a professional context — Formal will polish the tone"
 
     if context.get("tone") == "technical":

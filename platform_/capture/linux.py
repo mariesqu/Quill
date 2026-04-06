@@ -1,4 +1,5 @@
 """Linux text capture: X11 PRIMARY selection (xclip) with Ctrl+C clipboard fallback."""
+
 from __future__ import annotations
 
 import logging
@@ -24,8 +25,7 @@ class LinuxCapture(CaptureBackend):
         # X11 PRIMARY selection = whatever is currently highlighted (no Ctrl+C needed)
         try:
             result = subprocess.run(
-                ["xclip", "-o", "-selection", "primary"],
-                capture_output=True, text=True, timeout=1
+                ["xclip", "-o", "-selection", "primary"], capture_output=True, text=True, timeout=1
             )
             if result.returncode == 0:
                 return result.stdout.strip() or None
@@ -39,6 +39,7 @@ class LinuxCapture(CaptureBackend):
         original = ""
         try:
             import keyboard
+
             original = pyperclip.paste()
             pyperclip.copy("")
             keyboard.send("ctrl+c")

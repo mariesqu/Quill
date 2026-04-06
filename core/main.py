@@ -2,6 +2,7 @@
 Quill — main orchestrator.
 Runs as a Tauri sidecar: reads commands from stdin, writes events to stdout.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +11,7 @@ import sys
 from typing import Any
 
 from .config_loader import load_config, load_modes, save_user_config
-from .platform import get_backends, get_os
+from .platform import get_backends
 from .prompt_builder import build_prompt, suggest_mode
 from .streamer import (
     emit_chain_step,
@@ -43,18 +44,17 @@ log = logging.getLogger("quill.main")
 
 def _modes_list(modes: dict[str, Any]) -> list[dict]:
     return [
-        {"id": k, "label": v.get("label", k), "icon": v.get("icon", "")}
-        for k, v in modes.items()
+        {"id": k, "label": v.get("label", k), "icon": v.get("icon", "")} for k, v in modes.items()
     ]
 
 
 def _chains_list(chains: dict[str, Any]) -> list[dict]:
     return [
         {
-            "id":          k,
-            "label":       v.get("label", k),
-            "icon":        v.get("icon", ""),
-            "steps":       v.get("steps", []),
+            "id": k,
+            "label": v.get("label", k),
+            "icon": v.get("icon", ""),
+            "steps": v.get("steps", []),
             "description": v.get("description", ""),
         }
         for k, v in chains.items()
@@ -82,15 +82,19 @@ class QuillApp:
             return self._provider
         if name == "openrouter":
             from providers.openrouter import OpenRouterProvider
+
             self._provider = OpenRouterProvider(self.config)
         elif name == "ollama":
             from providers.ollama import OllamaProvider
+
             self._provider = OllamaProvider(self.config)
         elif name == "openai":
             from providers.openai import OpenAIProvider
+
             self._provider = OpenAIProvider(self.config)
         else:
             from providers.generic import GenericOpenAIProvider
+
             self._provider = GenericOpenAIProvider(self.config)
         self._provider_name = name
         return self._provider
@@ -139,13 +143,13 @@ class QuillApp:
         language: str,
         extra_instruction: str = "",
     ) -> str:
-        context  = self.backends["context"].get_active_context()
-        persona  = self.config.get("persona", {})
+        context = self.backends["context"].get_active_context()
+        persona = self.config.get("persona", {})
         system, user_prompt = build_prompt(
             text, mode, self.modes, context, language, persona, extra_instruction
         )
         provider = self._load_provider()
-        result   = await stream_to_overlay(provider.stream(user_prompt, system))
+        result = await stream_to_overlay(provider.stream(user_prompt, system))
         return result
 
     async def _handle_mode_selected(
@@ -159,7 +163,7 @@ class QuillApp:
                 emit_error(f"Unknown mode: {mode!r}")
                 return
             effective_language = language or self.config.get("language", "auto")
-            self._last_mode     = mode
+            self._last_mode = mode
             self._last_language = effective_language
 
             result = await self._run_single_mode(
@@ -171,6 +175,7 @@ class QuillApp:
             entry_id = None
             if self._history_enabled():
                 from .history import save_entry
+
                 context = self.backends["context"].get_active_context()
                 entry_id = save_entry(
                     original=self._last_text,
@@ -187,7 +192,7 @@ class QuillApp:
             if self._tutor_enabled() and self.config.get("tutor", {}).get("auto_explain"):
                 await self._handle_tutor_explain(entry_id)
 
-        except Exception as e:
+        except Exception:
             log.exception("Error processing mode %s", mode)
             emit_error(f"Failed to process mode '{mode}'. Check logs for details.")
 
@@ -203,26 +208,29 @@ class QuillApp:
                 emit_error(f"Unknown chain: {chain_id!r}")
                 return
 
-            chain    = self.chains[chain_id]
-            steps    = chain.get("steps", [])
+            chain = self.chains[chain_id]
+            steps = chain.get("steps", [])
             language = language or self.config.get("language", "auto")
-            text     = self._last_text
+            text = self._last_text
 
             for i, mode in enumerate(steps):
                 emit_chain_step(i + 1, len(steps), mode)
                 text = await self._run_single_mode(
-                    text, mode, language,
-                    extra_instruction if i == 0 else ""  # instruction only on first step
+                    text,
+                    mode,
+                    language,
+                    extra_instruction if i == 0 else "",  # instruction only on first step
                 )
 
-            self._last_result   = text
-            self._last_mode     = f"chain:{chain_id}"
+            self._last_result = text
+            self._last_mode = f"chain:{chain_id}"
             self._last_language = language
 
             entry_id = None
             if self._history_enabled():
                 from .history import save_entry
-                context  = self.backends["context"].get_active_context()
+
+                context = self.backends["context"].get_active_context()
                 entry_id = save_entry(
                     original=self._last_text,
                     output=text,
@@ -234,7 +242,7 @@ class QuillApp:
             self._last_entry_id = entry_id
             emit_done(text, entry_id)
 
-        except Exception as e:
+        except Exception:
             log.exception("Error running chain %s", chain_id)
             emit_error(f"Failed to run chain '{chain_id}'. Check logs for details.")
 
@@ -258,13 +266,16 @@ class QuillApp:
             chain_id = self._last_mode[6:]
             await self._handle_chain_selected(chain_id, self._last_language, extra_instruction)
         else:
-            await self._handle_mode_selected(self._last_mode, self._last_language, extra_instruction)
+            await self._handle_mode_selected(
+                self._last_mode, self._last_language, extra_instruction
+            )
 
     # ── AI Tutor ──────────────────────────────────────────────────────────────
 
     async def _handle_tutor_explain(self, entry_id: int | None = None) -> None:
         try:
             from .tutor import build_explain_prompt
+
             system, user_prompt = build_explain_prompt(
                 original=self._last_text,
                 output=self._last_result,
@@ -279,6 +290,7 @@ class QuillApp:
 
             if entry_id and self._history_enabled():
                 from .history import save_tutor_explanation
+
                 save_tutor_explanation(entry_id, explanation)
 
         except Exception as e:
@@ -287,10 +299,10 @@ class QuillApp:
 
     async def _handle_generate_lesson(self, period: str = "daily") -> None:
         try:
-            from .history import get_stats, save_lesson, get_latest_lesson
+            from .history import get_stats, save_lesson
             from .tutor import build_lesson_prompt
 
-            stats  = get_stats(days=1 if period == "daily" else 7)
+            stats = get_stats(days=1 if period == "daily" else 7)
             system, user_prompt = build_lesson_prompt(stats, period)
             provider = self._load_provider()
             lesson = ""
@@ -306,6 +318,7 @@ class QuillApp:
     async def _handle_get_history(self, limit: int = 30, language: str | None = None) -> None:
         try:
             from .history import get_recent
+
             entries = get_recent(limit=limit, language=language)
             emit_history(entries)
         except Exception as e:
@@ -317,6 +330,7 @@ class QuillApp:
     async def _handle_toggle_favorite(self, entry_id: int) -> None:
         try:
             from .history import toggle_favorite
+
             favorited = toggle_favorite(entry_id)
             emit_favorite_toggled(entry_id, favorited)
         except Exception as e:
@@ -328,6 +342,7 @@ class QuillApp:
     async def _handle_export_history(self, fmt: str = "json") -> None:
         try:
             from .history import get_all_entries
+
             entries = get_all_entries()
             emit_export_data(entries, fmt)
         except Exception as e:
@@ -345,8 +360,8 @@ class QuillApp:
     ) -> None:
         try:
             lang = language or self.config.get("language", "auto")
-            context  = self.backends["context"].get_active_context()
-            persona  = self.config.get("persona", {})
+            context = self.backends["context"].get_active_context()
+            persona = self.config.get("persona", {})
 
             system_a, prompt_a = build_prompt(
                 self._last_text, mode_a, self.modes, context, lang, persona, extra_instruction
@@ -377,9 +392,7 @@ class QuillApp:
                 "English speakers, 3) one-sentence tip on the trickiest sounds. "
                 "Be concise and practical. No preamble."
             )
-            user_prompt = (
-                f"Provide pronunciation guide for this {language} text:\n\n{text}"
-            )
+            user_prompt = f"Provide pronunciation guide for this {language} text:\n\n{text}"
             provider = self._load_provider()
             result = ""
             async for chunk in provider.stream(user_prompt, system):
@@ -423,12 +436,13 @@ class QuillApp:
             if not hk:
                 continue
             try:
+
                 def make_handler(m):
                     def handler():
-                        asyncio.run_coroutine_threadsafe(
-                            self._handle_mode_direct(m), self._loop
-                        )
+                        asyncio.run_coroutine_threadsafe(self._handle_mode_direct(m), self._loop)
+
                     return handler
+
                 self.backends["hotkey"].register(hk, make_handler(mode_id))
                 log.info("Registered per-mode hotkey %s → %s", hk, mode_id)
             except Exception as e:
@@ -479,9 +493,7 @@ class QuillApp:
                     extra_instruction=cmd.get("extra_instruction", ""),
                 )
             elif t == "retry":
-                await self._handle_retry(
-                    extra_instruction=cmd.get("extra_instruction", "")
-                )
+                await self._handle_retry(extra_instruction=cmd.get("extra_instruction", ""))
             elif t == "replace_confirmed":
                 await self._handle_replace_confirmed()
             elif t == "set_result":
@@ -525,29 +537,43 @@ class QuillApp:
                 # Also emit current templates on ping so UI stays in sync
                 emit_templates(self.config.get("templates", []))
             elif t == "save_config":
-                prev_clipboard_enabled = self.config.get("clipboard_monitor", {}).get("enabled", False)
+                prev_clipboard_enabled = self.config.get("clipboard_monitor", {}).get(
+                    "enabled", False
+                )
                 save_user_config(cmd.get("config", {}))
                 self.config = load_config()
                 self._provider = None  # Reset cached provider on config change
                 self.modes, self.chains = load_modes()
                 if self._history_enabled():
                     from .history import init_db
+
                     init_db()
                 # Start clipboard monitor if it was just enabled and not already running
-                new_clipboard_enabled = self.config.get("clipboard_monitor", {}).get("enabled", False)
-                if new_clipboard_enabled and not prev_clipboard_enabled and not self._clipboard_monitor_running:
+                new_clipboard_enabled = self.config.get("clipboard_monitor", {}).get(
+                    "enabled", False
+                )
+                if (
+                    new_clipboard_enabled
+                    and not prev_clipboard_enabled
+                    and not self._clipboard_monitor_running
+                ):
                     from .clipboard_monitor import run_clipboard_monitor
+
                     self._clipboard_monitor_running = True
+
                     async def _run_monitor():
                         try:
                             await run_clipboard_monitor(
-                                get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
+                                get_enabled=lambda: self.config.get("clipboard_monitor", {}).get(
+                                    "enabled", False
+                                ),
                                 emit_fn=emit_clipboard_change,
                             )
                         except Exception as e:
                             log.warning("Clipboard monitor stopped: %s", e)
                         finally:
                             self._clipboard_monitor_running = False
+
                     asyncio.ensure_future(_run_monitor())
                     log.info("Clipboard monitor started (enabled via settings).")
             else:
@@ -561,6 +587,7 @@ class QuillApp:
         # Initialise history DB if enabled
         if self._history_enabled():
             from .history import init_db
+
             init_db()
 
         # Load platform backends
@@ -587,17 +614,22 @@ class QuillApp:
         clipboard_cfg = self.config.get("clipboard_monitor", {})
         if clipboard_cfg.get("enabled"):
             from .clipboard_monitor import run_clipboard_monitor
+
             self._clipboard_monitor_running = True
+
             async def _run_monitor():
                 try:
                     await run_clipboard_monitor(
-                        get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
+                        get_enabled=lambda: self.config.get("clipboard_monitor", {}).get(
+                            "enabled", False
+                        ),
                         emit_fn=emit_clipboard_change,
                     )
                 except Exception as e:
                     log.warning("Clipboard monitor stopped: %s", e)
                 finally:
                     self._clipboard_monitor_running = False
+
             asyncio.ensure_future(_run_monitor())
             log.info("Clipboard monitor started.")
 

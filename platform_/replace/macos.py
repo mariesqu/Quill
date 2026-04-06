@@ -1,4 +1,5 @@
 """macOS paste-back backend using pynput + pyperclip."""
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +17,7 @@ class MacOSReplace(ReplaceBackend):
         original = ""
         try:
             from pynput import keyboard as kb
+
             original = pyperclip.paste()
             pyperclip.copy(text)
             time.sleep(0.05)

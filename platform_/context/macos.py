@@ -1,4 +1,5 @@
 """macOS active app context detection via AppKit NSWorkspace."""
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +13,7 @@ class MacOSContext(ContextBackend):
     def get_active_context(self) -> dict:
         try:
             from AppKit import NSWorkspace
+
             app = NSWorkspace.sharedWorkspace().frontmostApplication()
             name = app.localizedName() or ""
             return lookup_context(name)

@@ -1,15 +1,14 @@
 """Windows capture tests — skipped on non-Windows."""
+
 import platform
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    platform.system() != "Windows",
-    reason="Windows only"
-)
+pytestmark = pytest.mark.skipif(platform.system() != "Windows", reason="Windows only")
 
 
 def test_windows_capture_imports():
     from platform_.capture.windows import WindowsCapture
+
     capture = WindowsCapture()
     assert hasattr(capture, "get_selected_text")
 

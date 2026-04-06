@@ -4,6 +4,7 @@ Builds prompts for:
   - Explaining a specific transformation (what changed & why)
   - Generating daily/weekly lessons from usage patterns
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -74,11 +75,11 @@ def build_lesson_prompt(stats: dict[str, Any], period: str = "daily") -> tuple[s
     lang_counts = stats.get("lang_counts", {})
     avg_reduction = stats.get("avg_reduction", 0)
     sample_originals = stats.get("sample_originals", [])
-    sample_outputs   = stats.get("sample_outputs", [])
+    sample_outputs = stats.get("sample_outputs", [])
 
     samples_block = ""
     for i, (orig, out) in enumerate(zip(sample_originals[:3], sample_outputs[:3])):
-        samples_block += f"\nExample {i+1}:\n  Before: {orig}\n  After:  {out}\n"
+        samples_block += f"\nExample {i + 1}:\n  Before: {orig}\n  After:  {out}\n"
 
     lang_focus = ""
     if top_lang and top_lang not in ("auto", ""):
@@ -87,13 +88,13 @@ def build_lesson_prompt(stats: dict[str, Any], period: str = "daily") -> tuple[s
             f"Include at least one language-specific insight for {top_lang}."
         )
 
-    user_prompt = f"""Generate a {period} writing lesson for this user based on their Quill usage over the last {'day' if period == 'daily' else '7 days'}.
+    user_prompt = f"""Generate a {period} writing lesson for this user based on their Quill usage over the last {"day" if period == "daily" else "7 days"}.
 
 USAGE SUMMARY:
-- Total transformations: {stats['count']}
+- Total transformations: {stats["count"]}
 - Most used mode: {top_mode} ({mode_counts.get(top_mode, 0)} times)
-- Mode breakdown: {', '.join(f'{m}: {c}' for m, c in sorted(mode_counts.items(), key=lambda x: -x[1]))}
-- Languages used: {', '.join(f'{l}: {c}' for l, c in sorted(lang_counts.items(), key=lambda x: -x[1]) if l != 'auto')}
+- Mode breakdown: {", ".join(f"{m}: {c}" for m, c in sorted(mode_counts.items(), key=lambda x: -x[1]))}
+- Languages used: {", ".join(f"{lang}: {cnt}" for lang, cnt in sorted(lang_counts.items(), key=lambda x: -x[1]) if lang != "auto")}
 - Average word count reduction: {int(avg_reduction * 100)}%
 {lang_focus}
 

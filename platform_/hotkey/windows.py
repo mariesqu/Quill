@@ -1,4 +1,5 @@
 """Windows global hotkey backend using the `keyboard` library."""
+
 from __future__ import annotations
 
 import logging
@@ -15,12 +16,14 @@ class WindowsHotkey(HotkeyBackend):
 
     def register(self, hotkey: str, callback: Callable) -> None:
         import keyboard
+
         keyboard.add_hotkey(hotkey, callback)
         self._registered.append(hotkey)
         log.info("Registered hotkey: %s", hotkey)
 
     def unregister_all(self) -> None:
         import keyboard
+
         for hk in self._registered:
             try:
                 keyboard.remove_hotkey(hk)

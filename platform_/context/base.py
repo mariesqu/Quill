@@ -1,4 +1,5 @@
 """Abstract base for app context detection backends."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

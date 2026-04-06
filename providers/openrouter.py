@@ -1,4 +1,5 @@
 """OpenRouter provider (default). Free tier with many models."""
+
 from __future__ import annotations
 
 import json
@@ -55,10 +56,7 @@ class OpenRouterProvider(GenericOpenAIProvider):
                 if response.status_code >= 400:
                     body = await response.aread()
                     body_text = body.decode("utf-8", errors="replace")
-                    log.error(
-                        "OpenRouter API error %s: %s",
-                        response.status_code, body_text
-                    )
+                    log.error("OpenRouter API error %s: %s", response.status_code, body_text)
                     raise RuntimeError(
                         _friendly_error(response.status_code, body_text, self._model)
                     )

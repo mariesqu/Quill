@@ -1,4 +1,5 @@
 """Windows text capture: UIA (pywinauto) with clipboard fallback."""
+
 from __future__ import annotations
 
 import logging
@@ -21,8 +22,8 @@ class WindowsCapture(CaptureBackend):
 
     def _try_uia(self) -> Optional[str]:
         try:
-            import pywinauto
             from pywinauto import Desktop
+
             desktop = Desktop(backend="uia")
             focused = desktop.get_focus()
             if focused:
@@ -44,6 +45,7 @@ class WindowsCapture(CaptureBackend):
             original = pyperclip.paste()
             pyperclip.copy("")
             import keyboard
+
             keyboard.send("ctrl+c")
             # Retry with change detection instead of fixed sleep
             for _ in range(6):  # up to 300ms total

@@ -2,6 +2,7 @@
 IPC streamer: emits newline-delimited JSON messages to stdout (read by Tauri sidecar)
 and reads JSON commands from stdin.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,14 +16,18 @@ def _emit(msg: dict[str, Any]) -> None:
     print(json.dumps(msg, ensure_ascii=False), flush=True)
 
 
-def emit_show_overlay(text: str, context: dict[str, Any], modes: list[dict], chains: list[dict]) -> None:
-    _emit({
-        "type":    "show_overlay",
-        "text":    text,
-        "context": context,
-        "modes":   modes,
-        "chains":  chains,
-    })
+def emit_show_overlay(
+    text: str, context: dict[str, Any], modes: list[dict], chains: list[dict]
+) -> None:
+    _emit(
+        {
+            "type": "show_overlay",
+            "text": text,
+            "context": context,
+            "modes": modes,
+            "chains": chains,
+        }
+    )
 
 
 def emit_chunk(chunk: str) -> None:
@@ -62,9 +67,15 @@ def emit_export_data(entries: list[dict], fmt: str) -> None:
 
 
 def emit_comparison_done(mode_a: str, result_a: str, mode_b: str, result_b: str) -> None:
-    _emit({"type": "comparison_done",
-           "mode_a": mode_a, "result_a": result_a,
-           "mode_b": mode_b, "result_b": result_b})
+    _emit(
+        {
+            "type": "comparison_done",
+            "mode_a": mode_a,
+            "result_a": result_a,
+            "mode_b": mode_b,
+            "result_b": result_b,
+        }
+    )
 
 
 def emit_pronunciation(text: str) -> None:
@@ -101,6 +112,7 @@ async def read_command() -> dict[str, Any] | None:
         return json.loads(line.strip())
     except json.JSONDecodeError as e:
         import logging
+
         logging.getLogger("quill.streamer").warning(
             "Invalid JSON command: %s (error: %s)", line.strip()[:100], e
         )

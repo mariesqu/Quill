@@ -1,4 +1,5 @@
 """Linux paste-back backend using keyboard + pyperclip."""
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ class LinuxReplace(ReplaceBackend):
             pyperclip.copy(text)
             time.sleep(0.05)
             import keyboard
+
             keyboard.send("ctrl+v")
             time.sleep(0.1)
             return True

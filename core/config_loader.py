@@ -2,6 +2,7 @@
 Configuration loader for Quill.
 Priority: env vars → config/user.yaml → config/default.yaml
 """
+
 from __future__ import annotations
 
 import os
@@ -13,8 +14,8 @@ import yaml
 
 _ROOT = Path(__file__).parent.parent
 _DEFAULT_CONFIG = _ROOT / "config" / "default.yaml"
-_USER_CONFIG    = _ROOT / "config" / "user.yaml"
-_MODES_CONFIG   = _ROOT / "config" / "modes.yaml"
+_USER_CONFIG = _ROOT / "config" / "user.yaml"
+_MODES_CONFIG = _ROOT / "config" / "modes.yaml"
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -48,7 +49,9 @@ def load_config() -> dict[str, Any]:
 
     # Resolve adaptive hotkey
     if config.get("hotkey") is None:
-        config["hotkey"] = "cmd+shift+space" if platform.system() == "Darwin" else "ctrl+shift+space"
+        config["hotkey"] = (
+            "cmd+shift+space" if platform.system() == "Darwin" else "ctrl+shift+space"
+        )
 
     return config
 
@@ -61,13 +64,13 @@ def load_modes() -> tuple[dict[str, Any], dict[str, Any]]:
     with open(_MODES_CONFIG, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
-    modes  = data.get("modes",  {})
+    modes = data.get("modes", {})
     chains = data.get("chains", {})
 
     if _USER_CONFIG.exists():
         with open(_USER_CONFIG, encoding="utf-8") as f:
             user = yaml.safe_load(f) or {}
-        modes.update(user.get("custom_modes",  {}))
+        modes.update(user.get("custom_modes", {}))
         chains.update(user.get("custom_chains", {}))
 
     return modes, chains

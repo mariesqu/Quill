@@ -1,9 +1,6 @@
 """Tests for core/config_loader.py"""
-import os
+
 import platform
-import pytest
-from pathlib import Path
-import yaml
 
 from core.config_loader import load_config, load_modes, _deep_merge
 

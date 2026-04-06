@@ -5,6 +5,7 @@ a `clipboard_change` IPC event when new text is detected.
 Only runs when `clipboard_monitor.enabled: true` in config.
 Uses pyperclip which is already a core dependency.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -14,11 +15,13 @@ from typing import Callable
 
 log = logging.getLogger(__name__)
 
-_POLL_INTERVAL = 0.5   # seconds
-_MIN_WORDS     = 3     # ignore clipboard entries shorter than this
+_POLL_INTERVAL = 0.5  # seconds
+_MIN_WORDS = 3  # ignore clipboard entries shorter than this
 
 
-async def run_clipboard_monitor(get_enabled: Callable[[], bool], emit_fn: Callable[[str], None]) -> None:
+async def run_clipboard_monitor(
+    get_enabled: Callable[[], bool], emit_fn: Callable[[str], None]
+) -> None:
     """
     Continuously poll the clipboard. Call this as a background asyncio task.
 

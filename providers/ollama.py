@@ -1,4 +1,5 @@
 """Ollama provider — fully local, privacy-first."""
+
 from __future__ import annotations
 
 import json

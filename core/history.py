@@ -6,6 +6,7 @@ Schema:
   history     — one row per transformation
   tutor_lessons — cached daily/weekly lessons
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -76,15 +77,14 @@ def save_entry(
 ) -> int:
     """Save a transformation to history. Returns the new row id."""
     wc_before = len(original.split())
-    wc_after  = len(output.split())
+    wc_after = len(output.split())
     with _get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO history
                (app_hint, mode, language, persona_tone,
                 original_text, output_text, word_count_before, word_count_after)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (app_hint, mode, language, persona_tone,
-             original, output, wc_before, wc_after),
+            (app_hint, mode, language, persona_tone, original, output, wc_before, wc_after),
         )
         entry_id = cur.lastrowid
         _prune_if_needed(conn)
@@ -130,9 +130,7 @@ def get_stats(days: int = 7) -> dict[str, Any]:
     """Return usage stats for the last N days — used to generate lessons."""
     since = (datetime.utcnow() - timedelta(days=days)).isoformat()
     with _get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM history WHERE timestamp >= ?", (since,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM history WHERE timestamp >= ?", (since,)).fetchall()
 
     entries = [dict(r) for r in rows]
     if not entries:
@@ -147,18 +145,18 @@ def get_stats(days: int = 7) -> dict[str, Any]:
         lang = e["language"] or "auto"
         lang_counts[lang] = lang_counts.get(lang, 0) + 1
         total_before += e["word_count_before"] or 0
-        total_after  += e["word_count_after"]  or 0
+        total_after += e["word_count_after"] or 0
 
     return {
-        "count":       len(entries),
-        "days":        days,
+        "count": len(entries),
+        "days": days,
         "mode_counts": mode_counts,
         "lang_counts": lang_counts,
         "avg_reduction": round(1 - total_after / max(total_before, 1), 2),
-        "top_mode":    max(mode_counts, key=mode_counts.get) if mode_counts else None,
+        "top_mode": max(mode_counts, key=mode_counts.get) if mode_counts else None,
         "top_language": max(lang_counts, key=lang_counts.get) if lang_counts else None,
         "sample_originals": [e["original_text"][:200] for e in entries[:5]],
-        "sample_outputs":   [e["output_text"][:200]   for e in entries[:5]],
+        "sample_outputs": [e["output_text"][:200] for e in entries[:5]],
     }
 
 

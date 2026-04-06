@@ -2,6 +2,7 @@
 Generic OpenAI-compatible provider.
 Used for OpenRouter, OpenAI, LM Studio, Jan.ai, Groq, etc.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,11 +29,7 @@ def _friendly_error(status_code: int, body: str, model: str) -> str:
     api_msg = ""
     try:
         data = json.loads(body)
-        api_msg = (
-            data.get("error", {}).get("message")
-            or data.get("message")
-            or ""
-        )
+        api_msg = data.get("error", {}).get("message") or data.get("message") or ""
     except Exception:
         api_msg = body.strip()
 
@@ -48,9 +45,13 @@ def _friendly_error(status_code: int, body: str, model: str) -> str:
     if status_code == 404:
         return f"Model not found (404): '{model}'. Check the model name in Settings → AI Provider."
     if status_code == 429:
-        return "Rate limit reached (429). Wait a moment and try again, or switch to a different model."
+        return (
+            "Rate limit reached (429). Wait a moment and try again, or switch to a different model."
+        )
     if status_code >= 500:
-        return f"Provider server error ({status_code}). The API is having issues — try again shortly."
+        return (
+            f"Provider server error ({status_code}). The API is having issues — try again shortly."
+        )
     return f"API error {status_code}: {api_msg or 'Unknown error'}"
 
 
@@ -60,8 +61,7 @@ class GenericOpenAIProvider(BaseProvider):
     def __init__(self, config: dict, base_url: str | None = None) -> None:
         super().__init__(config)
         self._base_url = (
-            base_url if base_url is not None
-            else config.get("base_url", "http://localhost:1234/v1")
+            base_url if base_url is not None else config.get("base_url", "http://localhost:1234/v1")
         ).rstrip("/")
         self._api_key = config.get("api_key") or ""
         self._model = config.get("model", "gpt-3.5-turbo")
@@ -97,8 +97,7 @@ class GenericOpenAIProvider(BaseProvider):
                     body = await response.aread()
                     body_text = body.decode("utf-8", errors="replace")
                     log.error(
-                        "API error %s from %s: %s",
-                        response.status_code, self._base_url, body_text
+                        "API error %s from %s: %s", response.status_code, self._base_url, body_text
                     )
                     raise RuntimeError(
                         _friendly_error(response.status_code, body_text, self._model)
