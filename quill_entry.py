@@ -1,4 +1,5 @@
 """PyInstaller entry point for Quill sidecar — uses absolute imports."""
+
 import sys
 import os
 
