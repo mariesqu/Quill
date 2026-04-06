@@ -245,6 +245,7 @@ function ModeBar({ modes, chains, activeMode, isStreaming, onSelectMode, onSelec
             } : {}}>
             <span className="mode-btn-icon">{mode.icon}</span>
             {mode.label}
+            <span className="mode-shortcut">{i + 1}</span>
             {isSuggested && <span className="mode-suggested-dot" />}
             {isPickedForCompare && <span style={{ fontSize: 9, marginLeft: 2 }}>✓</span>}
           </button>
@@ -299,8 +300,13 @@ function OutputArea({ streamedText, isStreaming, activeMode, selectedText, showD
     return (
       <div className="overlay-output">
         <div className="overlay-output-empty">
-          <span style={{ fontSize: 20 }}>✨</span>
-          <span className="overlay-output-hint">Pick a mode above — or press 1–7</span>
+          <span className="overlay-output-hint">Pick a mode above or press <kbd style={{
+            padding: "1px 5px", borderRadius: 4, fontSize: 10, fontFamily: "var(--font-mono)",
+            background: "rgba(255,255,255,0.06)", border: "1px solid var(--color-border)",
+          }}>1</kbd>–<kbd style={{
+            padding: "1px 5px", borderRadius: 4, fontSize: 10, fontFamily: "var(--font-mono)",
+            background: "rgba(255,255,255,0.06)", border: "1px solid var(--color-border)",
+          }}>7</kbd></span>
         </div>
       </div>
     );
@@ -692,47 +698,41 @@ export default function Overlay({ bridge, onOpenTutor }) {
               isDone={isDone} onRequest={() => requestTutorExplain(lastEntryId)} />
           )}
 
-          {/* Action bar */}
+          {/* Action bar — clear text labels */}
           <div className="overlay-actions">
             <button className="btn-replace"
               onClick={async () => {
-                // If user chose a comparison side, tell Python which result to paste
                 if (chosenText) await setResultText(chosenText);
                 confirmReplace();
               }}
               disabled={!isDone || (!activeText) || (!!comparisonResult && !chosenText)}>
-              ↩ Replace{chosenText ? " chosen" : ""}
+              ↩ Replace
             </button>
             <button className="btn-copy" onClick={handleCopy}
               disabled={!activeText}>
-              {copied ? "✓" : "⎘"}
+              {copied ? "✓ Copied" : "Copy"}
             </button>
             {isDone && streamedText && !comparisonResult && (
-              <button className="btn-copy" title="Toggle diff view"
-                onClick={() => setShowDiff((v) => !v)}
-                style={{ color: showDiff ? "var(--color-primary)" : undefined }}>
-                ⊞
+              <button className={`btn-copy${showDiff ? " active" : ""}`}
+                onClick={() => setShowDiff((v) => !v)}>
+                Diff
               </button>
             )}
-            {/* Compare toggle */}
-            <button className="btn-copy"
-              title={compareMode ? "Cancel comparison" : "Compare two modes side by side"}
+            <button className={`btn-copy${compareMode ? " active" : ""}`}
               onClick={() => { setCompareMode((v) => !v); setComparePick([]); }}
-              style={{ color: compareMode ? "var(--color-warning)" : undefined }}
-              disabled={isStreaming}>
-              ⚖
+              disabled={isStreaming}
+              style={compareMode ? { color: "var(--color-warning)", borderColor: "rgba(252,211,77,0.3)" } : undefined}>
+              {compareMode ? "Cancel" : "Compare"}
             </button>
-            {/* Undo */}
             {canUndo && (
-              <button className="btn-copy" title="Undo  [Ctrl+Z]" onClick={undo}
-                disabled={isStreaming}>
-                ⎌
+              <button className="btn-copy" onClick={undo} disabled={isStreaming}>
+                Undo
               </button>
             )}
             {(isDone || error) && !compareMode && (
               <button className="btn-copy" onClick={() => retry(extraInstruction)}
-                title="Try again  [r]" disabled={isStreaming}>
-                ↻
+                disabled={isStreaming}>
+                Retry
               </button>
             )}
           </div>
