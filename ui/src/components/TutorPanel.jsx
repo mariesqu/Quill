@@ -25,8 +25,13 @@ function renderMarkdown(md) {
   return elements;
 }
 
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+}
+
 function inlineFormat(text) {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  const safe = escapeHtml(text);
+  const parts = safe.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**"))
       return <strong key={i}>{part.slice(2, -2)}</strong>;
@@ -155,13 +160,16 @@ function HistoryTab({ bridge }) {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [exportFmt, setExportFmt]       = useState("json");
   const [exporting, setExporting]       = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
+    setLoadingHistory(true);
     bridge.getHistory(100);
 
     const unsubHistory = bridge.onHistory((newEntries, favoriteUpdate) => {
       if (newEntries !== null) {
         setEntries(newEntries);
+        setLoadingHistory(false);
       } else if (favoriteUpdate) {
         setEntries((prev) =>
           prev.map((e) => e.id === favoriteUpdate.entry_id
@@ -187,7 +195,13 @@ function HistoryTab({ bridge }) {
 
   const handleExport = useCallback(async () => {
     setExporting(true);
-    await bridge.exportHistory(exportFmt);
+    const timeout = setTimeout(() => setExporting(false), 30000);
+    try {
+      await bridge.exportHistory(exportFmt);
+    } catch {
+      clearTimeout(timeout);
+      setExporting(false);
+    }
   }, [bridge, exportFmt]);
 
   useEffect(() => {
@@ -211,6 +225,15 @@ function HistoryTab({ bridge }) {
   };
 
   const displayed = favoritesOnly ? entries.filter((e) => e.favorited) : entries;
+
+  if (loadingHistory) {
+    return (
+      <div className="history-empty">
+        <span style={{ fontSize: 32 }}>⟳</span>
+        <span>Loading history...</span>
+      </div>
+    );
+  }
 
   if (entries.length === 0) {
     return (

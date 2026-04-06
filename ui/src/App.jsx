@@ -17,14 +17,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubs = [
-      listen("quill://permission_required", (e) => {
-        if (e.payload === "accessibility") setView("permission");
-      }),
-      listen("quill://open_settings", () => setView("settings")),
-      listen("quill://open_tutor",    () => setView("tutor")),
-    ];
-    return () => unsubs.forEach((p) => p.then((fn) => fn()));
+    const unsubs = [];
+    listen("quill://permission_required", (e) => {
+      if (e.payload === "accessibility") setView("permission");
+    }).then((fn) => unsubs.push(fn));
+    listen("quill://open_settings", () => setView("settings")).then((fn) => unsubs.push(fn));
+    listen("quill://open_tutor",    () => setView("tutor")).then((fn) => unsubs.push(fn));
+    return () => unsubs.forEach((fn) => fn?.());
   }, []);
 
   if (view === "firstrun") {

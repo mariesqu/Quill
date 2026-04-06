@@ -119,7 +119,8 @@ function LanguagePicker({ value, onChange, disabled }) {
   const handleQuick = (code) => { setShowCustom(false); onChange(code); };
   const handleCustomSubmit = (e) => {
     e.preventDefault();
-    if (custom.trim()) { onChange(custom.trim()); setShowCustom(false); setCustom(""); }
+    const sanitized = custom.trim().replace(/[^a-zA-Z\s\-]/g, "").slice(0, 50);
+    if (sanitized) { onChange(sanitized); setShowCustom(false); setCustom(""); }
   };
 
   return (
@@ -509,10 +510,12 @@ export default function Overlay({ bridge, onOpenTutor }) {
 
   const handleCopy = useCallback(() => {
     if (!activeText) return;
-    navigator.clipboard.writeText(activeText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard.writeText(activeText)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch((err) => console.error("Copy failed:", err));
   }, [activeText]);
 
   const handleModeSelect = useCallback((modeId) => {
@@ -561,7 +564,7 @@ export default function Overlay({ bridge, onOpenTutor }) {
                 <button className="overlay-close-btn" onClick={onOpenTutor} title="AI Tutor"
                   style={{ width: 24, height: 24, fontSize: 13 }}>🎓</button>
               )}
-              <button className="overlay-close-btn" onClick={dismiss} title="Dismiss (Esc)">✕</button>
+              <button className="overlay-close-btn" onClick={dismiss} title="Dismiss (Esc)" aria-label="Close overlay">✕</button>
             </div>
           </div>
 

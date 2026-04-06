@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 class MacOSReplace(ReplaceBackend):
-    def paste_text(self, text: str) -> None:
+    def paste_text(self, text: str) -> bool:
         original = ""
         try:
             from pynput import keyboard as kb
@@ -24,8 +24,10 @@ class MacOSReplace(ReplaceBackend):
                 ctrl.press("v")
                 ctrl.release("v")
             time.sleep(0.1)
+            return True
         except Exception as e:
             log.error("Failed to paste text: %s", e)
+            return False
         finally:
             try:
                 time.sleep(0.05)

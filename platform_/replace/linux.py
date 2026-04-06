@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 class LinuxReplace(ReplaceBackend):
-    def paste_text(self, text: str) -> None:
+    def paste_text(self, text: str) -> bool:
         original = ""
         try:
             original = pyperclip.paste()
@@ -21,8 +21,10 @@ class LinuxReplace(ReplaceBackend):
             import keyboard
             keyboard.send("ctrl+v")
             time.sleep(0.1)
+            return True
         except Exception as e:
             log.error("Failed to paste text: %s", e)
+            return False
         finally:
             try:
                 time.sleep(0.05)

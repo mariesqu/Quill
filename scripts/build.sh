@@ -4,6 +4,18 @@
 
 set -euo pipefail
 
+check_command() {
+    if ! command -v "$1" &>/dev/null; then
+        echo "❌ Required tool not found: $1"
+        exit 1
+    fi
+}
+
+check_command python3
+check_command pip3
+check_command npm
+check_command cargo
+
 OS="$(uname -s)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
@@ -19,7 +31,7 @@ echo "→ Building Python sidecar (quill-core)..."
 cd "$ROOT"
 
 if ! command -v pyinstaller &>/dev/null; then
-    pip install pyinstaller -q
+    pip install "pyinstaller>=6.0,<7.0" -q
 fi
 
 pyinstaller \

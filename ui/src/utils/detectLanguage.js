@@ -33,7 +33,9 @@ function countInRange(chars, start, end) {
 export function detectLanguage(text) {
   if (!text || text.trim().length < 15) return null;
 
-  const chars = [...text];
+  // Limit input to prevent ReDoS on very large text
+  const safeText = text.length > 100000 ? text.slice(0, 100000) : text;
+  const chars = [...safeText];
   const total = chars.length;
 
   // 1. Japanese — check for Hiragana/Katakana FIRST (before CJK, to avoid Chinese overlap)
@@ -61,15 +63,16 @@ export function detectLanguage(text) {
   }
 
   // 4. Latin-script word matching
-  const words = text.toLowerCase().match(/\b[a-zàáâãäåæçèéêëìíîïðñòóôõöùúûüý]+\b/g) || [];
-  if (words.length < 4) return null;
+  const words = safeText.toLowerCase().match(/\b[a-zàáâãäåæçèéêëìíîïðñòóôõöùúûüý]+\b/g) || [];
+  const cappedWords = words.length > 1000 ? words.slice(0, 1000) : words;
+  if (cappedWords.length < 4) return null;
 
   let bestLang  = null;
   let bestScore = 0;
 
   for (const [lang, signature] of Object.entries(WORD_SIGNATURES)) {
     const sigSet = new Set(signature);
-    const score  = words.filter((w) => sigSet.has(w)).length / words.length;
+    const score  = cappedWords.filter((w) => sigSet.has(w)).length / cappedWords.length;
     if (score > bestScore && score > 0.07) {
       bestScore = score;
       bestLang  = lang;

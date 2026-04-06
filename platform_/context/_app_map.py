@@ -1,5 +1,7 @@
 """Shared app-name → context mapping, used by all OS backends."""
 
+import re
+
 APP_CONTEXT_MAP: dict[str, dict] = {
     # Email
     "mail":          {"tone": "professional", "hint": "email"},
@@ -57,8 +59,12 @@ APP_CONTEXT_MAP: dict[str, dict] = {
 
 
 def lookup_context(app_name: str) -> dict:
-    """Look up context for a given app name (case-insensitive substring match)."""
+    """Look up context for a given app name (case-insensitive word-boundary match)."""
     name_lower = app_name.lower()
+    for key, ctx in APP_CONTEXT_MAP.items():
+        if re.search(r'(?:^|[\b_\-. ])' + re.escape(key) + r'(?:$|[\b_\-. ])', name_lower) or key == name_lower:
+            return {"app": app_name, **ctx}
+    # Fallback to substring match for short app names
     for key, ctx in APP_CONTEXT_MAP.items():
         if key in name_lower:
             return {"app": app_name, **ctx}

@@ -27,6 +27,8 @@ class MacOSHotkey(HotkeyBackend):
 
     def register(self, hotkey: str, callback: Callable) -> None:
         from pynput import keyboard
+        if self._listener:
+            self._listener.stop()
         combo = _to_pynput(hotkey)
         log.info("Registering hotkey: %s → %s", hotkey, combo)
         self._listener = keyboard.GlobalHotKeys({combo: callback})

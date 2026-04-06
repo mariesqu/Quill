@@ -12,17 +12,19 @@ log = logging.getLogger(__name__)
 
 
 class WindowsReplace(ReplaceBackend):
-    def paste_text(self, text: str) -> None:
+    def paste_text(self, text: str) -> bool:
         original = ""
         try:
             original = pyperclip.paste()
             pyperclip.copy(text)
-            time.sleep(0.05)  # brief pause for clipboard to settle
+            time.sleep(0.05)
             import keyboard
             keyboard.send("ctrl+v")
             time.sleep(0.1)
+            return True
         except Exception as e:
             log.error("Failed to paste text: %s", e)
+            return False
         finally:
             try:
                 time.sleep(0.05)

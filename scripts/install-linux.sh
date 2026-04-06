@@ -23,6 +23,11 @@ else
     echo "⚠  Unknown package manager. Install xdotool and xclip manually."
 fi
 
+if ! command -v python3 &>/dev/null; then
+    echo "❌ Python 3 installation failed. Please install manually."
+    exit 1
+fi
+
 # ── Python venv ───────────────────────────────────────────────────────────────
 echo "→ Setting up Python environment..."
 mkdir -p "$QUILL_DIR"

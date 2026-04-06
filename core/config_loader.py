@@ -28,11 +28,11 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_config() -> dict[str, Any]:
-    with open(_DEFAULT_CONFIG) as f:
+    with open(_DEFAULT_CONFIG, encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
 
     if _USER_CONFIG.exists():
-        with open(_USER_CONFIG) as f:
+        with open(_USER_CONFIG, encoding="utf-8") as f:
             user = yaml.safe_load(f) or {}
         config = _deep_merge(config, user)
 
@@ -58,14 +58,14 @@ def load_modes() -> tuple[dict[str, Any], dict[str, Any]]:
     Returns (modes, chains) dicts.
     Modes and chains from user.yaml are merged on top of defaults.
     """
-    with open(_MODES_CONFIG) as f:
+    with open(_MODES_CONFIG, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
     modes  = data.get("modes",  {})
     chains = data.get("chains", {})
 
     if _USER_CONFIG.exists():
-        with open(_USER_CONFIG) as f:
+        with open(_USER_CONFIG, encoding="utf-8") as f:
             user = yaml.safe_load(f) or {}
         modes.update(user.get("custom_modes",  {}))
         chains.update(user.get("custom_chains", {}))
@@ -76,10 +76,10 @@ def load_modes() -> tuple[dict[str, Any], dict[str, Any]]:
 def save_user_config(updates: dict[str, Any]) -> None:
     existing: dict = {}
     if _USER_CONFIG.exists():
-        with open(_USER_CONFIG) as f:
+        with open(_USER_CONFIG, encoding="utf-8") as f:
             existing = yaml.safe_load(f) or {}
 
     merged = _deep_merge(existing, updates)
     _USER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    with open(_USER_CONFIG, "w") as f:
+    with open(_USER_CONFIG, "w", encoding="utf-8") as f:
         yaml.dump(merged, f, default_flow_style=False, allow_unicode=True)

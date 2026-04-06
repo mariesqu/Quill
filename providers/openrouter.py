@@ -1,10 +1,13 @@
 """OpenRouter provider (default). Free tier with many models."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import AsyncIterator
 
-from .generic import GenericOpenAIProvider
+import httpx
+
+from .generic import GenericOpenAIProvider, _friendly_error
 
 log = logging.getLogger(__name__)
 
@@ -25,10 +28,6 @@ class OpenRouterProvider(GenericOpenAIProvider):
 
     async def stream(self, prompt: str, system: str = "") -> AsyncIterator[str]:
         # OpenRouter requires HTTP-Referer for rate limiting attribution
-        import httpx
-        import json
-        from .generic import _friendly_error
-
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -72,9 +71,12 @@ class OpenRouterProvider(GenericOpenAIProvider):
                         break
                     try:
                         chunk = json.loads(data)
-                        delta = chunk["choices"][0]["delta"]
+                        choices = chunk.get("choices", [])
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {})
                         content = delta.get("content", "")
                         if content:
                             yield content
-                    except Exception as e:
-                        log.debug("Failed to parse SSE chunk: %s — %s", data, e)
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                        log.debug("Failed to parse SSE chunk: %s — %s", data[:100], e)

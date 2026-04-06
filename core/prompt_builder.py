@@ -36,7 +36,12 @@ def _build_persona_block(persona: dict[str, Any]) -> str:
         return ""
 
     parts: list[str] = ["\n\n─── User Voice Constraints (always apply) ───"]
-    tone_desc = PERSONA_TONE_DESCRIPTIONS.get(persona.get("tone", "natural"), "")
+    tone = persona.get("tone", "natural")
+    if tone not in PERSONA_TONE_DESCRIPTIONS:
+        import logging
+        logging.getLogger("quill.prompt").warning("Unknown persona tone: %s, using natural", tone)
+        tone = "natural"
+    tone_desc = PERSONA_TONE_DESCRIPTIONS.get(tone, "")
     if tone_desc:
         parts.append(tone_desc)
     style = (persona.get("style") or "").strip()

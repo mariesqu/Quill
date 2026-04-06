@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time as _time
+from typing import Callable
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +18,7 @@ _POLL_INTERVAL = 0.5   # seconds
 _MIN_WORDS     = 3     # ignore clipboard entries shorter than this
 
 
-async def run_clipboard_monitor(get_enabled: callable, emit_fn: callable) -> None:
+async def run_clipboard_monitor(get_enabled: Callable[[], bool], emit_fn: Callable[[str], None]) -> None:
     """
     Continuously poll the clipboard. Call this as a background asyncio task.
 
@@ -27,6 +29,9 @@ async def run_clipboard_monitor(get_enabled: callable, emit_fn: callable) -> Non
     import pyperclip
 
     last_text = ""
+    _last_emit_time = 0.0
+    _DEBOUNCE_SECS = 1.0
+
     try:
         last_text = pyperclip.paste() or ""
     except Exception:
@@ -41,9 +46,11 @@ async def run_clipboard_monitor(get_enabled: callable, emit_fn: callable) -> Non
         except Exception:
             continue
 
+        now = _time.monotonic()
         if current != last_text:
             last_text = current
-            if len(current.split()) >= _MIN_WORDS:
+            if len(current.split()) >= _MIN_WORDS and (now - _last_emit_time) >= _DEBOUNCE_SECS:
+                _last_emit_time = now
                 try:
                     emit_fn(current)
                 except Exception as e:

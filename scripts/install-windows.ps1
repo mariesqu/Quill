@@ -14,7 +14,13 @@ Write-Host "==================================" -ForegroundColor Cyan
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "→ Python not found. Installing via winget..." -ForegroundColor Yellow
     winget install Python.Python.3.11 --silent
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+    # Refresh PATH
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        Write-Host "❌ Python installation failed. Please install manually from python.org" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # ── Create venv ───────────────────────────────────────────────────────────────

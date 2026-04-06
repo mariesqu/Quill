@@ -21,6 +21,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 const LS_LANGUAGE = "quill_output_language";
 const LS_THEME    = "quill_theme";
+const UNDO_STACK_LIMIT = 20;
 
 export function loadPersistedTheme() {
   return localStorage.getItem(LS_THEME) || "dark";
@@ -89,10 +90,10 @@ export function useQuillBridge() {
     document.documentElement.setAttribute("data-theme", t);
   }, []);
 
-  // Apply persisted theme on mount
+  // Apply theme whenever it changes
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [theme]);
 
   // External listener registries
   const tutorLessonListeners  = useRef([]);
@@ -151,7 +152,7 @@ export function useQuillBridge() {
       outputStack.current = [
         { text, mode: activeModeRef.current, entryId: eid },
         ...outputStack.current,
-      ].slice(0, 20);
+      ].slice(0, UNDO_STACK_LIMIT);
       setCanUndo(outputStack.current.length > 1);
     }).then((fn) => unsubs.push(fn));
 
@@ -270,13 +271,18 @@ export function useQuillBridge() {
 
   const undo = useCallback(async () => {
     if (outputStack.current.length < 2) return;
-    outputStack.current = outputStack.current.slice(1);
-    const prev = outputStack.current[0];
-    setStreamedText(prev.text);
-    setIsDone(true);
-    setCanUndo(outputStack.current.length > 1);
-    // Sync the undone text back to Python so replace_confirmed pastes the correct version
-    await sendToPython({ type: "set_result", text: prev.text });
+    const newStack = outputStack.current.slice(1);
+    const prev = newStack[0];
+    try {
+      await sendToPython({ type: "set_result", text: prev.text });
+      // Only mutate state after successful sync to Python
+      outputStack.current = newStack;
+      setStreamedText(prev.text);
+      setIsDone(true);
+      setCanUndo(newStack.length > 1);
+    } catch (err) {
+      console.error("Undo sync failed:", err);
+    }
   }, []);
 
   const compareModes = useCallback(async (modeA, modeB, extraInstruction = "") => {

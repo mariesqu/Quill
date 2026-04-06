@@ -5,5 +5,7 @@ from .generic import GenericOpenAIProvider
 
 
 class GenericProvider(GenericOpenAIProvider):
-    """Alias for use with provider: generic in config."""
-    pass
+    """Generic OpenAI-compatible endpoint provider (LM Studio, Jan.ai, Groq, etc.)."""
+
+    def is_available(self) -> bool:
+        return bool(self._base_url)

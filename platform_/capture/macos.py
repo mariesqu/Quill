@@ -45,9 +45,13 @@ class MacOSCapture(CaptureBackend):
             with ctrl.pressed(kb.Key.cmd):
                 ctrl.press("c")
                 ctrl.release("c")
-            time.sleep(0.15)
-            result = pyperclip.paste()
-            return result.strip() or None
+            # Retry with change detection instead of fixed sleep
+            for _ in range(6):  # up to 300ms total
+                time.sleep(0.05)
+                result = pyperclip.paste()
+                if result:
+                    return result.strip() or None
+            return None
         except Exception as e:
             log.debug("Clipboard capture failed: %s", e)
             return None

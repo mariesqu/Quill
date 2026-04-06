@@ -72,21 +72,28 @@ class QuillApp:
         self._last_entry_id: int | None = None
         self._last_mode: str = ""
         self._last_language: str = "auto"
+        self._clipboard_monitor_running = False
+        self._provider = None
+        self._provider_name: str = ""
 
     def _load_provider(self):
         name = self.config.get("provider", "openrouter")
+        if self._provider and self._provider_name == name:
+            return self._provider
         if name == "openrouter":
             from providers.openrouter import OpenRouterProvider
-            return OpenRouterProvider(self.config)
+            self._provider = OpenRouterProvider(self.config)
         elif name == "ollama":
             from providers.ollama import OllamaProvider
-            return OllamaProvider(self.config)
+            self._provider = OllamaProvider(self.config)
         elif name == "openai":
             from providers.openai import OpenAIProvider
-            return OpenAIProvider(self.config)
+            self._provider = OpenAIProvider(self.config)
         else:
             from providers.generic import GenericOpenAIProvider
-            return GenericOpenAIProvider(self.config)
+            self._provider = GenericOpenAIProvider(self.config)
+        self._provider_name = name
+        return self._provider
 
     def _history_enabled(self) -> bool:
         return bool(self.config.get("history", {}).get("enabled"))
@@ -148,6 +155,9 @@ class QuillApp:
         extra_instruction: str = "",
     ) -> None:
         try:
+            if mode not in self.modes:
+                emit_error(f"Unknown mode: {mode!r}")
+                return
             effective_language = language or self.config.get("language", "auto")
             self._last_mode     = mode
             self._last_language = effective_language
@@ -179,7 +189,7 @@ class QuillApp:
 
         except Exception as e:
             log.exception("Error processing mode %s", mode)
-            emit_error(str(e))
+            emit_error(f"Failed to process mode '{mode}'. Check logs for details.")
 
     async def _handle_chain_selected(
         self,
@@ -226,7 +236,7 @@ class QuillApp:
 
         except Exception as e:
             log.exception("Error running chain %s", chain_id)
-            emit_error(str(e))
+            emit_error(f"Failed to run chain '{chain_id}'. Check logs for details.")
 
     # ── Replace ───────────────────────────────────────────────────────────────
 
@@ -518,6 +528,7 @@ class QuillApp:
                 prev_clipboard_enabled = self.config.get("clipboard_monitor", {}).get("enabled", False)
                 save_user_config(cmd.get("config", {}))
                 self.config = load_config()
+                self._provider = None  # Reset cached provider on config change
                 self.modes, self.chains = load_modes()
                 if self._history_enabled():
                     from .history import init_db
@@ -527,12 +538,17 @@ class QuillApp:
                 if new_clipboard_enabled and not prev_clipboard_enabled and not self._clipboard_monitor_running:
                     from .clipboard_monitor import run_clipboard_monitor
                     self._clipboard_monitor_running = True
-                    asyncio.ensure_future(
-                        run_clipboard_monitor(
-                            get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
-                            emit_fn=emit_clipboard_change,
-                        )
-                    )
+                    async def _run_monitor():
+                        try:
+                            await run_clipboard_monitor(
+                                get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
+                                emit_fn=emit_clipboard_change,
+                            )
+                        except Exception as e:
+                            log.warning("Clipboard monitor stopped: %s", e)
+                        finally:
+                            self._clipboard_monitor_running = False
+                    asyncio.ensure_future(_run_monitor())
                     log.info("Clipboard monitor started (enabled via settings).")
             else:
                 log.warning("Unknown command: %s", t)
@@ -572,12 +588,17 @@ class QuillApp:
         if clipboard_cfg.get("enabled"):
             from .clipboard_monitor import run_clipboard_monitor
             self._clipboard_monitor_running = True
-            asyncio.ensure_future(
-                run_clipboard_monitor(
-                    get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
-                    emit_fn=emit_clipboard_change,
-                )
-            )
+            async def _run_monitor():
+                try:
+                    await run_clipboard_monitor(
+                        get_enabled=lambda: self.config.get("clipboard_monitor", {}).get("enabled", False),
+                        emit_fn=emit_clipboard_change,
+                    )
+                except Exception as e:
+                    log.warning("Clipboard monitor stopped: %s", e)
+                finally:
+                    self._clipboard_monitor_running = False
+            asyncio.ensure_future(_run_monitor())
             log.info("Clipboard monitor started.")
 
         emit_ready()

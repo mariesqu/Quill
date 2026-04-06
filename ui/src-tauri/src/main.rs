@@ -3,6 +3,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{
     AppHandle, Emitter, Manager, State,
@@ -13,7 +15,10 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// Holds the handle to the running Python sidecar process.
-struct PythonSidecar(Mutex<Option<CommandChild>>);
+struct PythonSidecar {
+    child: Mutex<Option<CommandChild>>,
+    ready: Arc<AtomicBool>,
+}
 
 /// Send a JSON message to the Python sidecar's stdin.
 #[tauri::command]
@@ -21,7 +26,10 @@ async fn send_to_python(
     message: String,
     sidecar: State<'_, PythonSidecar>,
 ) -> Result<(), String> {
-    let mut guard = sidecar.0.lock().unwrap();
+    if !sidecar.ready.load(Ordering::Acquire) {
+        return Err("Sidecar not ready yet".to_string());
+    }
+    let mut guard = sidecar.child.lock().unwrap();
     if let Some(child) = guard.as_mut() {
         let msg = format!("{}\n", message);
         child
@@ -49,14 +57,26 @@ fn start_python_sidecar(app: &AppHandle) {
     let sidecar_state = app.state::<PythonSidecar>();
     let app_handle = app.clone();
 
-    let sidecar_cmd = app
-        .shell()
-        .sidecar("quill-core")
-        .expect("quill-core sidecar not found");
+    let sidecar_cmd = match app.shell().sidecar("quill-core") {
+        Ok(cmd) => cmd,
+        Err(e) => {
+            eprintln!("[quill] quill-core sidecar not found: {}", e);
+            let _ = app_handle.emit("quill://error", serde_json::json!({"type": "error", "message": "Python sidecar not found. Please reinstall Quill."}));
+            return;
+        }
+    };
 
-    let (mut rx, child) = sidecar_cmd.spawn().expect("Failed to spawn quill-core");
+    let (mut rx, child) = match sidecar_cmd.spawn() {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("[quill] Failed to spawn quill-core: {}", e);
+            let _ = app_handle.emit("quill://error", serde_json::json!({"type": "error", "message": "Failed to start Python core. Check logs."}));
+            return;
+        }
+    };
 
-    *sidecar_state.0.lock().unwrap() = Some(child);
+    *sidecar_state.child.lock().unwrap() = Some(child);
+    let ready_flag = Arc::clone(&sidecar_state.ready);
 
     // Spawn an async task to relay sidecar stdout → frontend events
     tauri::async_runtime::spawn(async move {
@@ -64,7 +84,7 @@ fn start_python_sidecar(app: &AppHandle) {
             match event {
                 CommandEvent::Stdout(line) => {
                     if let Ok(text) = String::from_utf8(line) {
-                        relay_message(&app_handle, text.trim());
+                        relay_message(&app_handle, &ready_flag, text.trim());
                     }
                 }
                 CommandEvent::Stderr(line) => {
@@ -74,6 +94,9 @@ fn start_python_sidecar(app: &AppHandle) {
                 }
                 CommandEvent::Terminated(status) => {
                     eprintln!("[quill-core] Process exited: {:?}", status);
+                    ready_flag.store(false, Ordering::Release);
+                    let _ = app_handle.emit("quill://error",
+                        serde_json::json!({"type": "error", "message": "Python backend stopped unexpectedly. Please restart Quill."}));
                     break;
                 }
                 _ => {}
@@ -83,7 +106,7 @@ fn start_python_sidecar(app: &AppHandle) {
 }
 
 /// Parse a JSON line from Python and emit the appropriate Tauri event.
-fn relay_message(app: &AppHandle, line: &str) {
+fn relay_message(app: &AppHandle, ready_flag: &Arc<AtomicBool>, line: &str) {
     if line.is_empty() {
         return;
     }
@@ -155,27 +178,36 @@ fn relay_message(app: &AppHandle, line: &str) {
             let _ = app.emit("quill://permission_required", permission);
         }
         "ready" => {
+            ready_flag.store(true, Ordering::Release);
             eprintln!("[quill] Python sidecar ready");
         }
         _ => {
-            eprintln!("[relay] Unknown message type: {msg_type}");
+            eprintln!("[relay] Unknown message type: {msg_type} — {}", &line[..line.len().min(200)]);
         }
     }
 }
 
+const MENU_SHOW: &str = "show";
+const MENU_TUTOR: &str = "tutor";
+const MENU_SETTINGS: &str = "settings";
+const MENU_QUIT: &str = "quit";
+
 fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let show     = MenuItem::with_id(app, "show",     "Show Quill",   true, None::<&str>)?;
-    let tutor    = MenuItem::with_id(app, "tutor",    "AI Tutor…",    true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…",    true, None::<&str>)?;
+    let show     = MenuItem::with_id(app, MENU_SHOW,     "Show Quill",   true, None::<&str>)?;
+    let tutor    = MenuItem::with_id(app, MENU_TUTOR,    "AI Tutor…",    true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, MENU_SETTINGS, "Settings…",    true, None::<&str>)?;
     let sep      = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let quit     = MenuItem::with_id(app, "quit",     "Quit Quill",   true, None::<&str>)?;
+    let quit     = MenuItem::with_id(app, MENU_QUIT,     "Quit Quill",   true, None::<&str>)?;
     Menu::with_items(app, &[&show, &tutor, &settings, &sep, &quit])
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(PythonSidecar(Mutex::new(None)))
+        .manage(PythonSidecar {
+            child: Mutex::new(None),
+            ready: Arc::new(AtomicBool::new(false)),
+        })
         .invoke_handler(tauri::generate_handler![
             send_to_python,
             open_accessibility_settings,
@@ -200,26 +232,26 @@ fn main() {
                     }
                 })
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
+                    MENU_SHOW => {
                         if let Some(window) = app.get_webview_window("overlay") {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
                     }
-                    "tutor" => {
+                    MENU_TUTOR => {
                         let _ = app.emit("quill://open_tutor", ());
                         if let Some(window) = app.get_webview_window("overlay") {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
                     }
-                    "settings" => {
+                    MENU_SETTINGS => {
                         let _ = app.emit("quill://open_settings", ());
                         if let Some(window) = app.get_webview_window("overlay") {
                             let _ = window.show();
                         }
                     }
-                    "quit" => {
+                    MENU_QUIT => {
                         app.exit(0);
                     }
                     _ => {}

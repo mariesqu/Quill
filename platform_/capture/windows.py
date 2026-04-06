@@ -26,8 +26,7 @@ class WindowsCapture(CaptureBackend):
             desktop = Desktop(backend="uia")
             focused = desktop.get_focus()
             if focused:
-                patterns = focused.element_info.control_type
-                # Try getting selected text via UIA value pattern
+                # Try getting selected text via UIA text range provider
                 try:
                     sel = focused.iface_text_range_provider
                     if sel:
@@ -46,9 +45,13 @@ class WindowsCapture(CaptureBackend):
             pyperclip.copy("")
             import keyboard
             keyboard.send("ctrl+c")
-            time.sleep(0.15)
-            result = pyperclip.paste()
-            return result.strip() or None
+            # Retry with change detection instead of fixed sleep
+            for _ in range(6):  # up to 300ms total
+                time.sleep(0.05)
+                result = pyperclip.paste()
+                if result:  # clipboard changed from empty
+                    return result.strip() or None
+            return None
         except Exception as e:
             log.debug("Clipboard capture failed: %s", e)
             return None

@@ -62,7 +62,7 @@ def init_db() -> None:
         # Migrate existing databases that predate the favorited column
         try:
             conn.execute("ALTER TABLE history ADD COLUMN favorited INTEGER DEFAULT 0")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Column already exists
 
 
@@ -86,7 +86,21 @@ def save_entry(
             (app_hint, mode, language, persona_tone,
              original, output, wc_before, wc_after),
         )
-        return cur.lastrowid
+        entry_id = cur.lastrowid
+        _prune_if_needed(conn)
+        return entry_id
+
+
+def _prune_if_needed(conn: sqlite3.Connection, max_entries: int = 10000) -> None:
+    """Delete oldest entries if history exceeds max_entries."""
+    count = conn.execute("SELECT COUNT(*) FROM history").fetchone()[0]
+    if count > max_entries:
+        excess = count - max_entries
+        conn.execute(
+            "DELETE FROM history WHERE id IN "
+            "(SELECT id FROM history ORDER BY timestamp ASC LIMIT ?)",
+            (excess,),
+        )
 
 
 def save_tutor_explanation(entry_id: int, explanation: str) -> None:

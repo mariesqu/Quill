@@ -99,7 +99,11 @@ async def read_command() -> dict[str, Any] | None:
         return None
     try:
         return json.loads(line.strip())
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        import logging
+        logging.getLogger("quill.streamer").warning(
+            "Invalid JSON command: %s (error: %s)", line.strip()[:100], e
+        )
         return None
 
 

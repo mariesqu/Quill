@@ -15,6 +15,13 @@ from .base import BaseProvider
 log = logging.getLogger(__name__)
 
 
+def _mask_key(key: str) -> str:
+    """Mask API key for safe logging."""
+    if not key or len(key) < 8:
+        return "***"
+    return f"{key[:4]}…{key[-4:]}"
+
+
 def _friendly_error(status_code: int, body: str, model: str) -> str:
     """Return a human-readable error message from an API error response."""
     # Try to extract the API's own message first
@@ -53,10 +60,10 @@ class GenericOpenAIProvider(BaseProvider):
     def __init__(self, config: dict, base_url: str | None = None) -> None:
         super().__init__(config)
         self._base_url = (
-            base_url
-            or config.get("base_url", "http://localhost:1234/v1")
+            base_url if base_url is not None
+            else config.get("base_url", "http://localhost:1234/v1")
         ).rstrip("/")
-        self._api_key = config.get("api_key") or "none"
+        self._api_key = config.get("api_key") or ""
         self._model = config.get("model", "gpt-3.5-turbo")
 
     def is_available(self) -> bool:
@@ -105,9 +112,12 @@ class GenericOpenAIProvider(BaseProvider):
                         break
                     try:
                         chunk = json.loads(data)
-                        delta = chunk["choices"][0]["delta"]
+                        choices = chunk.get("choices", [])
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {})
                         content = delta.get("content", "")
                         if content:
                             yield content
-                    except Exception as e:
-                        log.debug("Failed to parse SSE chunk: %s — %s", data, e)
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                        log.debug("Failed to parse SSE chunk: %s — %s", data[:100], e)

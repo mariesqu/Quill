@@ -23,7 +23,6 @@ class OllamaProvider(BaseProvider):
 
     def is_available(self) -> bool:
         try:
-            import httpx
             r = httpx.get(f"{self._base_url}/api/tags", timeout=2)
             return r.status_code == 200
         except Exception:
@@ -46,16 +45,16 @@ class OllamaProvider(BaseProvider):
             ) as response:
                 if response.status_code >= 400:
                     body = await response.aread()
-                    body_text = body.decode("utf-8", errors="replace")
-                    log.error("Ollama error %s: %s", response.status_code, body_text)
+                    error_text = body.decode("utf-8", errors="replace")[:1000]  # Limit size
+                    log.error("Ollama error %s: %s", response.status_code, error_text)
                     if response.status_code == 404:
                         raise RuntimeError(
                             f"Model '{self._model}' not found. Run: ollama pull {self._model}"
                         )
                     try:
-                        err = json.loads(body_text).get("error", body_text)
+                        err = json.loads(error_text).get("error", error_text)
                     except Exception:
-                        err = body_text
+                        err = error_text
                     raise RuntimeError(f"Ollama error {response.status_code}: {err}")
 
                 async for line in response.aiter_lines():
@@ -68,5 +67,5 @@ class OllamaProvider(BaseProvider):
                             yield text
                         if chunk.get("done"):
                             break
-                    except Exception as e:
-                        log.debug("Failed to parse Ollama chunk: %s — %s", line, e)
+                    except (json.JSONDecodeError, KeyError, TypeError) as e:
+                        log.debug("Failed to parse Ollama chunk: %s — %s", line[:100], e)
