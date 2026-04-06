@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "quill"
@@ -43,6 +43,9 @@ dev = [
 
 [project.scripts]
 quill = "core.main:cli_entry"
+
+[tool.setuptools.packages.find]
+include = ["core*", "providers*", "platform_*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
