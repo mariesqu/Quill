@@ -42,10 +42,17 @@ class WindowsCapture(CaptureBackend):
     def _try_clipboard(self) -> Optional[str]:
         original = ""
         try:
-            original = pyperclip.paste()
-            pyperclip.copy("")
             import keyboard
 
+            # Wait for hotkey modifier keys to be released before sending Ctrl+C,
+            # otherwise the OS receives Ctrl+Shift+Space+C which doesn't copy.
+            for _ in range(20):  # up to 500ms
+                if not (keyboard.is_pressed("shift") or keyboard.is_pressed("space")):
+                    break
+                time.sleep(0.025)
+
+            original = pyperclip.paste()
+            pyperclip.copy("")
             keyboard.send("ctrl+c")
             # Retry with change detection instead of fixed sleep
             for _ in range(6):  # up to 300ms total

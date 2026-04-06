@@ -16,21 +16,37 @@ build/
 
 # Quill user config (contains API keys)
 config/user.yaml
+ui/config/
+
+# PyInstaller
+*.spec
+*.manifest
+
+# Sidecar binaries (build artifacts — never commit)
+ui/quill-core.exe
+ui/quill-core-*.exe
+ui/src-tauri/quill-core
+ui/src-tauri/quill-core.exe
+ui/src-tauri/quill-core-*.exe
 
 # Node
 node_modules/
 ui/dist/
 
-# Tauri build
+# Tauri build artifacts
 ui/src-tauri/target/
-ui/src-tauri/quill-core
-ui/src-tauri/quill-core.exe
+ui/src-tauri/gen/
+
+# SQLite databases
+*.db
+*.sqlite
 
 # OS
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+*~
 
 # IDEs
 .vscode/settings.json

@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import DiffView from "./DiffView";
+
+const startDrag = (e) => {
+  // Only drag on left-click on the drag target itself (not buttons inside it)
+  if (e.button === 0 && e.target === e.currentTarget) getCurrentWindow().startDragging();
+};
 import ComparisonView from "./ComparisonView";
 import { fleschKincaid, gradeLabel } from "../utils/readability";
 import { detectLanguage } from "../utils/detectLanguage";
@@ -541,9 +547,21 @@ export default function Overlay({ bridge, onOpenTutor }) {
 
   if (!visible) {
     return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center",
-        justifyContent: "center", color: "rgba(240,240,248,0.18)", fontSize: 13 }}>
-        Waiting for hotkey…
+      <div onMouseDown={startDrag} style={{ height: "100vh", display: "flex",
+        flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+        color: "var(--color-text-muted, rgba(240,240,248,0.5))", fontSize: 13,
+        background: "var(--color-bg, rgba(20,20,30,0.92))", borderRadius: 12,
+        cursor: "grab", position: "relative" }}>
+        <button onClick={() => getCurrentWindow().hide()} style={{
+          position: "absolute", top: 10, right: 14, background: "none",
+          border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer",
+          fontSize: 16, padding: 4 }} aria-label="Hide window">✕</button>
+        <div style={{ fontSize: 32 }}>🪶</div>
+        <div>Select text anywhere, then press</div>
+        <kbd style={{ padding: "4px 12px", borderRadius: 6, fontSize: 12,
+          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}>
+          Ctrl+Shift+Space
+        </kbd>
       </div>
     );
   }
@@ -552,8 +570,8 @@ export default function Overlay({ bridge, onOpenTutor }) {
     <>
       <div className="overlay-root">
         <div className="overlay-card">
-          {/* Header */}
-          <div className="overlay-header">
+          {/* Header — drag region */}
+          <div className="overlay-header" onMouseDown={startDrag}>
             <div className="overlay-logo">
               <div className="overlay-logo-icon">🪶</div>
               Quill

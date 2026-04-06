@@ -6,9 +6,17 @@ and reads JSON commands from stdin.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import sys
 from typing import Any, AsyncIterator
+
+# Force stdout/stdin to UTF-8 — Windows defaults to cp1252 which can't encode
+# emoji characters in mode labels, user text, etc.
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stdin.encoding != "utf-8":
+    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
 
 
 def _emit(msg: dict[str, Any]) -> None:

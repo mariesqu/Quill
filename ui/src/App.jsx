@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Overlay from "./components/Overlay";
 import FirstRun from "./components/FirstRun";
 import Settings from "./components/Settings";
@@ -21,8 +22,16 @@ export default function App() {
     listen("quill://permission_required", (e) => {
       if (e.payload === "accessibility") setView("permission");
     }).then((fn) => unsubs.push(fn));
-    listen("quill://open_settings", () => setView("settings")).then((fn) => unsubs.push(fn));
-    listen("quill://open_tutor",    () => setView("tutor")).then((fn) => unsubs.push(fn));
+    listen("quill://open_settings", () => {
+      setView("settings");
+      getCurrentWindow().show();
+      getCurrentWindow().setFocus();
+    }).then((fn) => unsubs.push(fn));
+    listen("quill://open_tutor", () => {
+      setView("tutor");
+      getCurrentWindow().show();
+      getCurrentWindow().setFocus();
+    }).then((fn) => unsubs.push(fn));
     return () => unsubs.forEach((fn) => fn?.());
   }, []);
 
@@ -38,10 +47,10 @@ export default function App() {
     return <PermissionPrompt onDone={() => setView("overlay")} />;
   }
   if (view === "settings") {
-    return <Settings onClose={() => setView("overlay")} bridge={bridge} />;
+    return <Settings onClose={() => { setView("overlay"); getCurrentWindow().hide(); }} bridge={bridge} />;
   }
   if (view === "tutor") {
-    return <TutorPanel onClose={() => setView("overlay")} bridge={bridge} />;
+    return <TutorPanel onClose={() => { setView("overlay"); getCurrentWindow().hide(); }} bridge={bridge} />;
   }
 
   return (

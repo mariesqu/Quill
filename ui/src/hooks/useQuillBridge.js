@@ -107,7 +107,7 @@ export function useQuillBridge() {
   useEffect(() => {
     const unsubs = [];
 
-    listen("quill://show_overlay", (e) => {
+    listen("quill://show_overlay", async (e) => {
       const { text, context, modes, chains } = e.payload;
       setSelectedText(text);
       setContext(context);
@@ -128,6 +128,11 @@ export function useQuillBridge() {
       setCanUndo(false);
       streamBuffer.current = "";
       setVisible(true);
+      // Ensure the Tauri window is visible (may have been hidden by dismiss/replace)
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      await win.show();
+      await win.setFocus();
     }).then((fn) => unsubs.push(fn));
 
     listen("quill://smart_suggestion", (e) => {
@@ -309,8 +314,14 @@ export function useQuillBridge() {
   }, []);
 
   const confirmReplace = useCallback(async () => {
-    await sendToPython({ type: "replace_confirmed" });
+    // Hide the overlay window FIRST so focus returns to the original app,
+    // then tell Python to paste. Without this, Ctrl+V pastes into Quill.
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
     setVisible(false);
+    await getCurrentWindow().hide();
+    // Brief delay for the OS to return focus to the previous window
+    await new Promise((r) => setTimeout(r, 200));
+    await sendToPython({ type: "replace_confirmed" });
   }, []);
 
   const dismiss = useCallback(async () => {
@@ -324,6 +335,9 @@ export function useQuillBridge() {
     setComparisonResult(null);
     setPronunciation(null);
     setCompareMode(false);
+    // Hide the Tauri window so it doesn't block the desktop
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    getCurrentWindow().hide();
   }, []);
 
   // ── Tutor actions ──────────────────────────────────────────────────────────

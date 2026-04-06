@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['core\\main.py'],
+    ['quill_entry.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[('config/default.yaml', 'config'), ('config/modes.yaml', 'config')],
+    hiddenimports=['core', 'core.main', 'core.config_loader', 'core.streamer', 'core.history', 'core.tutor', 'core.clipboard_monitor', 'core.platform', 'core.prompt_builder', 'providers', 'providers.openrouter', 'providers.ollama', 'providers.openai', 'providers.generic', 'providers.generic_endpoint', 'platform_'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

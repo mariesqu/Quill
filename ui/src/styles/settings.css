@@ -1,11 +1,17 @@
 /* Settings UI */
 
 .settings-root {
-  min-height: 100vh;
+  height: 100vh;
   background: var(--color-bg);
   color: var(--color-text);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-root > :last-child {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .settings-topbar {

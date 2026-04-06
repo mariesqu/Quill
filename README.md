@@ -514,21 +514,32 @@ Custom modes and chains appear immediately in the overlay after saving — no re
 git clone https://github.com/mariesqu/Quill
 cd Quill
 
-# Python deps
-pip install -e ".[dev]"        # installs core + dev extras
+# Python deps (with platform extras)
+pip install -e ".[dev]"
+# Windows: pip install -e ".[dev,windows]"
+# macOS:   pip install -e ".[dev,macos]"
+# Linux:   pip install -e ".[dev,linux]"
+
+# UI deps
+cd ui && npm install && cd ..
 
 # Add your API key
 cp config/default.yaml config/user.yaml
-# Edit config/user.yaml and set api_key
+# Edit config/user.yaml and set api_key (see AI Providers below)
 
-# Terminal 1 — Python core (sidecar)
-python -m core.main
+# Build the Python sidecar binary
+pip install pyinstaller
+python -m PyInstaller --onefile --name quill-core --distpath ui \
+  --add-data "config/default.yaml;config" \
+  --add-data "config/modes.yaml;config" \
+  quill_entry.py
 
-# Terminal 2 — Tauri dev server
+# Run (single command — starts Vite + Rust + Python sidecar)
 cd ui
-npm install
 npm run tauri dev
 ```
+
+> **Note:** The sidecar binary at `ui/quill-core.exe` reads your config from `config/user.yaml` at the project root. You only need one config file.
 
 ### Platform-specific extras
 

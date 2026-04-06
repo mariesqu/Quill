@@ -4,8 +4,13 @@
  *   History tab  — scrollable log of all past transformations with diffs, favorites, export
  */
 import React, { useState, useEffect, useCallback } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "../styles/tutor.css";
 import DiffView from "./DiffView";
+
+const startDrag = (e) => {
+  if (e.button === 0 && e.target === e.currentTarget) getCurrentWindow().startDragging();
+};
 
 // ── Simple markdown renderer (no library dependency) ──────────────────────────
 function renderMarkdown(md) {
@@ -370,8 +375,8 @@ export default function TutorPanel({ onClose, bridge }) {
 
   return (
     <div className="tutor-root">
-      <div className="tutor-topbar">
-        <div className="tutor-topbar-title">🎓 AI Tutor</div>
+      <div className="tutor-topbar" onMouseDown={startDrag}>
+        <div className="tutor-topbar-title" onMouseDown={startDrag}>🎓 AI Tutor</div>
         <button className="overlay-close-btn" onClick={onClose}
           style={{ width: 28, height: 28 }}>✕</button>
       </div>

@@ -10,12 +10,36 @@ import platform
 from pathlib import Path
 from typing import Any
 
+import sys
+
 import yaml
 
-_ROOT = Path(__file__).parent.parent
-_DEFAULT_CONFIG = _ROOT / "config" / "default.yaml"
-_USER_CONFIG = _ROOT / "config" / "user.yaml"
-_MODES_CONFIG = _ROOT / "config" / "modes.yaml"
+
+def _get_bundle_root() -> Path:
+    """Where bundled default configs live (PyInstaller _MEIPASS or project root)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent.parent
+
+
+def _find_user_config() -> Path:
+    """Find user.yaml — checks project root first, then next to the exe."""
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).parent
+        # Project root is one level above ui/ where the exe lives
+        project_root = exe_dir.parent
+        project_cfg = project_root / "config" / "user.yaml"
+        if project_cfg.exists():
+            return project_cfg
+        # Fallback: next to the exe (e.g. installed app)
+        return exe_dir / "config" / "user.yaml"
+    return Path(__file__).parent.parent / "config" / "user.yaml"
+
+
+_BUNDLE_ROOT = _get_bundle_root()
+_DEFAULT_CONFIG = _BUNDLE_ROOT / "config" / "default.yaml"
+_USER_CONFIG = _find_user_config()
+_MODES_CONFIG = _BUNDLE_ROOT / "config" / "modes.yaml"
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

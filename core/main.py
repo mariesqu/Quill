@@ -166,9 +166,11 @@ class QuillApp:
             self._last_mode = mode
             self._last_language = effective_language
 
-            result = await self._run_single_mode(
-                self._last_text, mode, effective_language, extra_instruction
-            )
+            result = (
+                await self._run_single_mode(
+                    self._last_text, mode, effective_language, extra_instruction
+                )
+            ).strip()
             self._last_result = result
 
             # Save to history

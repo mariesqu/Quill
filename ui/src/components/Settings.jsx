@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "../styles/settings.css";
+
+const startDrag = (e) => {
+  if (e.button === 0 && e.target === e.currentTarget) getCurrentWindow().startDragging();
+};
 
 const PROVIDERS = [
   { id: "openrouter", label: "OpenRouter (free)" },
@@ -210,8 +215,8 @@ export default function Settings({ onClose, bridge }) {
 
   return (
     <div className="settings-root">
-      <div className="settings-topbar">
-        <div className="settings-topbar-title">🪶 Quill — Settings</div>
+      <div className="settings-topbar" onMouseDown={startDrag}>
+        <div className="settings-topbar-title" onMouseDown={startDrag}>🪶 Quill — Settings</div>
         <button className="overlay-close-btn" onClick={onClose} style={{ width: 28, height: 28 }}>✕</button>
       </div>
 

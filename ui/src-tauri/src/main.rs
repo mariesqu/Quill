@@ -215,7 +215,10 @@ fn main() {
         .setup(|app| {
             // Build system tray
             let menu = build_tray_menu(app.handle())?;
+            let icon = app.default_window_icon().cloned().unwrap();
             TrayIconBuilder::new()
+                .icon(icon)
+                .tooltip("Quill")
                 .menu(&menu)
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
