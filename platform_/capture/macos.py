@@ -40,6 +40,10 @@ class MacOSCapture(CaptureBackend):
         try:
             from pynput import keyboard as kb
 
+            # Brief delay for hotkey modifier keys (Cmd+Shift+Space) to release
+            # before sending Cmd+C — pynput doesn't expose is_pressed()
+            time.sleep(0.15)
+
             original = pyperclip.paste()
             pyperclip.copy("")
             ctrl = kb.Controller()

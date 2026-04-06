@@ -529,10 +529,12 @@ cp config/default.yaml config/user.yaml
 
 # Build the Python sidecar binary
 pip install pyinstaller
+# Note: --add-data separator is ; on Windows, : on macOS/Linux
 python -m PyInstaller --onefile --name quill-core --distpath ui \
-  --add-data "config/default.yaml;config" \
-  --add-data "config/modes.yaml;config" \
+  --add-data "config/default.yaml:config" \
+  --add-data "config/modes.yaml:config" \
   quill_entry.py
+# Windows: use ; instead of : in --add-data paths
 
 # Run (single command — starts Vite + Rust + Python sidecar)
 cd ui

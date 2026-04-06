@@ -34,16 +34,40 @@ if ! command -v pyinstaller &>/dev/null; then
     pip install "pyinstaller>=6.0,<7.0" -q
 fi
 
+# PyInstaller --add-data separator is : on Unix, ; on Windows
+SEP=":"
+if [[ "$OS" == MINGW* ]] || [[ "$OS" == MSYS* ]] || [[ "$OS" == CYGWIN* ]]; then
+    SEP=";"
+fi
+
 pyinstaller \
     --onefile \
     --name quill-core \
-    --distpath ui/src-tauri \
+    --distpath ui \
+    --add-data "config/default.yaml${SEP}config" \
+    --add-data "config/modes.yaml${SEP}config" \
+    --hidden-import core \
+    --hidden-import core.main \
+    --hidden-import core.config_loader \
+    --hidden-import core.streamer \
+    --hidden-import core.history \
+    --hidden-import core.tutor \
+    --hidden-import core.clipboard_monitor \
+    --hidden-import core.platform \
+    --hidden-import core.prompt_builder \
+    --hidden-import providers \
+    --hidden-import providers.openrouter \
+    --hidden-import providers.ollama \
+    --hidden-import providers.openai \
+    --hidden-import providers.generic \
+    --hidden-import providers.generic_endpoint \
+    --hidden-import platform_ \
     --hidden-import pynput.keyboard._xorg \
     --hidden-import pynput.keyboard._darwin \
     --hidden-import pynput.keyboard._win32 \
-    core/main.py
+    quill_entry.py
 
-echo "✓ quill-core built at ui/src-tauri/quill-core"
+echo "✓ quill-core built at ui/quill-core"
 
 # ── Tauri app ─────────────────────────────────────────────────────────────────
 echo "→ Building Tauri app..."
