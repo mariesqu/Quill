@@ -1,9 +1,13 @@
-"""Windows capture tests — skipped on non-Windows."""
+"""Windows capture tests — skipped on non-Windows and CI (keyboard lib hangs on headless runners)."""
 
+import os
 import platform
 import pytest
 
-pytestmark = pytest.mark.skipif(platform.system() != "Windows", reason="Windows only")
+pytestmark = [
+    pytest.mark.skipif(platform.system() != "Windows", reason="Windows only"),
+    pytest.mark.skipif(os.environ.get("CI") == "true", reason="keyboard lib hangs on headless CI"),
+]
 
 
 def test_windows_capture_imports():
