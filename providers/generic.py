@@ -66,13 +66,23 @@ class GenericOpenAIProvider(BaseProvider):
         self._api_key = config.get("api_key") or ""
         self._model = config.get("model", "gpt-3.5-turbo")
         self._custom_headers = self._parse_custom_headers(config.get("custom_headers", ""))
+        # Subclasses (OpenAI, OpenRouter) override _chat_path. For generic/custom
+        # endpoint the user provides the full URL — we don't append anything.
+        self._endpoint_url = f"{self._base_url}{self._chat_path()}"
+
+    def _chat_path(self) -> str:
+        """Path appended to base_url. Empty for custom endpoints (user gives full URL)."""
+        return ""
 
     @staticmethod
-    def _parse_custom_headers(raw: str) -> dict[str, str]:
-        """Parse 'Header-Name: value' lines into a dict."""
+    def _parse_custom_headers(raw) -> dict[str, str]:
+        """Parse custom headers from either a dict or 'Header: value' string."""
+        if isinstance(raw, dict):
+            # Already a dict (from YAML mapping)
+            return {str(k): str(v) for k, v in raw.items() if k}
+        if not raw or not isinstance(raw, str):
+            return {}
         headers: dict[str, str] = {}
-        if not raw:
-            return headers
         for line in raw.strip().splitlines():
             line = line.strip()
             if ":" in line:
@@ -101,19 +111,31 @@ class GenericOpenAIProvider(BaseProvider):
         # Merge custom headers (can override Authorization for custom auth schemes)
         if self._custom_headers:
             headers.update(self._custom_headers)
+            log.info(
+                "Custom headers applied: %s",
+                ", ".join(self._custom_headers.keys()),
+            )
+        else:
+            log.warning("No custom headers configured")
         payload = {
             "model": self._model,
             "messages": messages,
             "stream": True,
         }
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
             async with client.stream(
                 "POST",
-                f"{self._base_url}/chat/completions",
+                self._endpoint_url,
                 json=payload,
                 headers=headers,
             ) as response:
+                if response.status_code in (301, 302, 307, 308):
+                    location = response.headers.get("location", "unknown")
+                    raise RuntimeError(
+                        f"API redirected ({response.status_code}) to {location}. "
+                        "Check your Base URL and authentication headers (custom headers may not be reaching the server)."
+                    )
                 if response.status_code >= 400:
                     # Read the error body before raising so we can surface a useful message
                     body = await response.aread()

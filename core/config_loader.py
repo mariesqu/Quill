@@ -23,16 +23,20 @@ def _get_bundle_root() -> Path:
 
 
 def _find_user_config() -> Path:
-    """Find user.yaml — checks project root first, then next to the exe."""
+    """Find user.yaml — walk up from exe to find project root."""
     if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).parent
-        # Project root is one level above ui/ where the exe lives
-        project_root = exe_dir.parent
-        project_cfg = project_root / "config" / "user.yaml"
-        if project_cfg.exists():
-            return project_cfg
-        # Fallback: next to the exe (e.g. installed app)
-        return exe_dir / "config" / "user.yaml"
+        # Walk up from the exe looking for project root markers.
+        # Dev mode: exe at ui/src-tauri/target/debug/ (4 levels deep).
+        # Production: exe next to ui/ (1 level deep).
+        candidate = Path(sys.executable).parent
+        for _ in range(8):  # max 8 levels up
+            if (candidate / "pyproject.toml").exists() or (
+                (candidate / "config").is_dir() and (candidate / "core").is_dir()
+            ):
+                return candidate / "config" / "user.yaml"
+            candidate = candidate.parent
+        # Fallback: next to the exe (installed app, no project root)
+        return Path(sys.executable).parent / "config" / "user.yaml"
     return Path(__file__).parent.parent / "config" / "user.yaml"
 
 
@@ -53,6 +57,12 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_config() -> dict[str, Any]:
+    import logging
+
+    log = logging.getLogger("quill.config")
+    log.info("Loading defaults from: %s", _DEFAULT_CONFIG)
+    log.info("User config path: %s (exists=%s)", _USER_CONFIG, _USER_CONFIG.exists())
+
     with open(_DEFAULT_CONFIG, encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
 
@@ -101,6 +111,12 @@ def load_modes() -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def save_user_config(updates: dict[str, Any]) -> None:
+    import logging
+
+    log = logging.getLogger("quill.config")
+    log.info("Saving config to: %s", _USER_CONFIG)
+    log.debug("Config updates: %s", list(updates.keys()))
+
     existing: dict = {}
     if _USER_CONFIG.exists():
         with open(_USER_CONFIG, encoding="utf-8") as f:
@@ -110,3 +126,4 @@ def save_user_config(updates: dict[str, Any]) -> None:
     _USER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     with open(_USER_CONFIG, "w", encoding="utf-8") as f:
         yaml.dump(merged, f, default_flow_style=False, allow_unicode=True)
+    log.info("Config saved (%d keys)", len(merged))

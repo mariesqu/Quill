@@ -24,6 +24,9 @@ class OpenRouterProvider(GenericOpenAIProvider):
         )
         self._model = config.get("model", DEFAULT_MODEL)
 
+    def _chat_path(self) -> str:
+        return "/chat/completions"
+
     def is_available(self) -> bool:
         return bool(self.config.get("api_key"))
 
@@ -49,7 +52,7 @@ class OpenRouterProvider(GenericOpenAIProvider):
         async with httpx.AsyncClient(timeout=60) as client:
             async with client.stream(
                 "POST",
-                f"{self._base_url}/chat/completions",
+                self._endpoint_url,
                 json=payload,
                 headers=headers,
             ) as response:

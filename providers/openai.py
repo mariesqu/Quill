@@ -16,5 +16,8 @@ class OpenAIProvider(GenericOpenAIProvider):
         )
         self._model = config.get("model", DEFAULT_MODEL)
 
+    def _chat_path(self) -> str:
+        return "/chat/completions"
+
     def is_available(self) -> bool:
         return bool(self.config.get("api_key"))

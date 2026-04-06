@@ -154,7 +154,13 @@ export default function Settings({ onClose, bridge }) {
   const [model, setModel]         = useState(stored.model || "google/gemma-3-27b-it");
   const [apiKey, setApiKey]       = useState(stored.api_key || "");
   const [baseUrl, setBaseUrl]     = useState(stored.base_url || "");
-  const [customHeaders, setCustomHeaders] = useState(stored.custom_headers || "");
+  const [customHeaders, setCustomHeaders] = useState(() => {
+    // custom_headers may be a dict (from YAML) or a string — normalize to textarea format
+    const ch = stored.custom_headers;
+    if (!ch) return "";
+    if (typeof ch === "object") return Object.entries(ch).map(([k, v]) => `${k}: ${v}`).join("\n");
+    return ch;
+  });
 
   // Behaviour
   const [hotkey, setHotkey]       = useState(stored.hotkey || "");
@@ -198,7 +204,18 @@ export default function Settings({ onClose, bridge }) {
     if (apiKey)  config.api_key  = apiKey;
     if (baseUrl) config.base_url = baseUrl;
     if (hotkey)  config.hotkey   = hotkey;
-    if (customHeaders.trim()) config.custom_headers = customHeaders.trim();
+    // Parse custom headers from "Name: value" lines into a dict for clean YAML
+    // Send empty string to clear when user removes all headers
+    if (customHeaders.trim()) {
+      const hdrs = {};
+      customHeaders.trim().split("\n").forEach((line) => {
+        const idx = line.indexOf(":");
+        if (idx > 0) hdrs[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+      });
+      config.custom_headers = Object.keys(hdrs).length > 0 ? hdrs : "";
+    } else {
+      config.custom_headers = "";
+    }
 
     localStorage.setItem("quill_config_pending", JSON.stringify(config));
     if (bridge?.saveConfig) await bridge.saveConfig(config);
@@ -263,13 +280,23 @@ export default function Settings({ onClose, bridge }) {
                     onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
                 </div>
               )}
-              {["generic","ollama"].includes(provider) && (
+              {provider === "ollama" && (
                 <div className="settings-row">
                   <div><div className="settings-row-label">Base URL</div>
-                    <div className="settings-row-desc">API endpoint URL</div></div>
+                    <div className="settings-row-desc">Ollama server URL</div></div>
                   <input className="settings-input" type="text" value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder={provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234/v1"} />
+                    placeholder="http://localhost:11434" />
+                </div>
+              )}
+              {provider === "generic" && (
+                <div className="settings-row">
+                  <div><div className="settings-row-label">Endpoint URL</div>
+                    <div className="settings-row-desc">Full URL including path (e.g. /v1/chat/completions)</div></div>
+                  <input className="settings-input" type="text" value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder="https://api.example.com/v1/chat/completions"
+                    style={{ width: 280 }} />
                 </div>
               )}
               {provider === "generic" && (

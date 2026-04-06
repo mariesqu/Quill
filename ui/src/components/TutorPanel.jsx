@@ -80,9 +80,12 @@ function LessonsTab({ bridge }) {
   const [weeklyLesson, setWeeklyLesson] = useState(null);
   const [loading, setLoading]           = useState(null);
 
+  const [error, setError] = useState(null);
+
   const generate = useCallback(async (period) => {
     setLoading(period);
-    await bridge.generateLesson(period);
+    setError(null);
+  await bridge.generateLesson(period);
   }, [bridge]);
 
   useEffect(() => {
@@ -90,9 +93,21 @@ function LessonsTab({ bridge }) {
       if (period === "daily")  setDailyLesson(lesson);
       if (period === "weekly") setWeeklyLesson(lesson);
       setLoading(null);
+      setError(null);
     });
     return unsub;
   }, [bridge]);
+
+  // Reset loading on error (bridge.error changes when quill://error fires)
+  useEffect(() => {
+    if (bridge.error && loading) {
+      setError(bridge.error);
+      setLoading(null);
+      // Auto-dismiss error after 8 seconds
+      const t = setTimeout(() => setError(null), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [bridge.error, loading]);
 
   return (
     <>
@@ -125,6 +140,12 @@ function LessonsTab({ bridge }) {
 
       {weeklyLesson ? <LessonCard lesson={weeklyLesson} period="weekly" />
         : <EmptyLesson period="weekly" loading={loading === "weekly"} />}
+
+      {error && (
+        <div className="overlay-error" style={{ margin: "8px 0" }}>
+          <span>⚠️</span><span>{error}</span>
+        </div>
+      )}
     </>
   );
 }
