@@ -57,12 +57,6 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_config() -> dict[str, Any]:
-    import logging
-
-    log = logging.getLogger("quill.config")
-    log.info("Loading defaults from: %s", _DEFAULT_CONFIG)
-    log.info("User config path: %s (exists=%s)", _USER_CONFIG, _USER_CONFIG.exists())
-
     with open(_DEFAULT_CONFIG, encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
 
@@ -111,12 +105,6 @@ def load_modes() -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def save_user_config(updates: dict[str, Any]) -> None:
-    import logging
-
-    log = logging.getLogger("quill.config")
-    log.info("Saving config to: %s", _USER_CONFIG)
-    log.debug("Config updates: %s", list(updates.keys()))
-
     existing: dict = {}
     if _USER_CONFIG.exists():
         with open(_USER_CONFIG, encoding="utf-8") as f:
@@ -126,4 +114,3 @@ def save_user_config(updates: dict[str, Any]) -> None:
     _USER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     with open(_USER_CONFIG, "w", encoding="utf-8") as f:
         yaml.dump(merged, f, default_flow_style=False, allow_unicode=True)
-    log.info("Config saved (%d keys)", len(merged))

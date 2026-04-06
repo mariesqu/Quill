@@ -111,12 +111,6 @@ class GenericOpenAIProvider(BaseProvider):
         # Merge custom headers (can override Authorization for custom auth schemes)
         if self._custom_headers:
             headers.update(self._custom_headers)
-            log.info(
-                "Custom headers applied: %s",
-                ", ".join(self._custom_headers.keys()),
-            )
-        else:
-            log.warning("No custom headers configured")
         payload = {
             "model": self._model,
             "messages": messages,
