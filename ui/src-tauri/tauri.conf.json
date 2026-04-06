@@ -14,8 +14,8 @@
       {
         "label": "overlay",
         "title": "Quill",
-        "width": 500,
-        "height": 640,
+        "width": 640,
+        "height": 680,
         "decorations": false,
         "alwaysOnTop": true,
         "transparent": true,

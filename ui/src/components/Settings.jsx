@@ -217,7 +217,11 @@ export default function Settings({ onClose, bridge }) {
     <div className="settings-root">
       <div className="settings-topbar" onMouseDown={startDrag}>
         <div className="settings-topbar-title" onMouseDown={startDrag}>🪶 Quill — Settings</div>
-        <button className="overlay-close-btn" onClick={onClose} style={{ width: 28, height: 28 }}>✕</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {saved && <span style={{ fontSize: 11, color: "var(--color-success)", fontWeight: 600 }}>✓ Saved</span>}
+          <button className="settings-topbar-btn" onClick={handleSave}>Save</button>
+          <button className="overlay-close-btn" onClick={onClose} style={{ width: 28, height: 28 }}>✕</button>
+        </div>
       </div>
 
       <div className="settings-tabs">
@@ -488,13 +492,7 @@ export default function Settings({ onClose, bridge }) {
         )}
       </div>
 
-      {/* Save bar */}
-      <div className="settings-save-bar">
-        <button className="btn-copy" onClick={onClose}>Cancel</button>
-        <button className="btn-continue" onClick={handleSave}>
-          {saved ? "✓ Saved!" : "Save changes"}
-        </button>
-      </div>
+      {/* Save bar removed — Save button is now in the topbar */}
     </div>
   );
 }

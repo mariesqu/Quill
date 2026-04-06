@@ -9,10 +9,7 @@
   overflow: hidden;
 }
 
-.settings-root > :last-child {
-  flex: 1;
-  overflow-y: auto;
-}
+/* Body is the scrollable area */
 
 .settings-topbar {
   display: flex;
@@ -36,6 +33,24 @@
   gap: 8px;
 }
 
+.settings-topbar-btn {
+  padding: 5px 14px;
+  border: 1px solid rgba(139, 124, 246, 0.3);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-dim);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-sans);
+}
+
+.settings-topbar-btn:hover {
+  background: rgba(139, 124, 246, 0.18);
+  border-color: rgba(139, 124, 246, 0.5);
+}
+
 .settings-body {
   flex: 1;
   overflow-y: auto;
@@ -43,7 +58,7 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 520px;
+  max-width: 600px;
   margin: 0 auto;
   width: 100%;
 }
@@ -191,8 +206,12 @@
   padding: 0 24px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
-  gap: 2px;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+
+.settings-tabs::-webkit-scrollbar { display: none; }
 
 .settings-tab {
   padding: 11px 14px;
@@ -318,17 +337,4 @@
   min-height: 48px;
 }
 
-/* ── Save button ─────────────────────────────────────────────────────────── */
-
-/* Save button */
-.settings-save-bar {
-  position: sticky;
-  bottom: 0;
-  padding: 16px 24px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
-  backdrop-filter: blur(20px);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
+/* Save bar removed — Save is now in the topbar */
