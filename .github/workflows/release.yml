@@ -67,14 +67,20 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -e ".[${{ matrix.python_extras }}]"
+          pip install -e ".[dev]"
           pip install "pyinstaller>=6.0,<7.0"
 
-      - name: Install macOS extras (best effort)
-        if: runner.os == 'macOS'
-        run: pip install pyobjc-framework-AppKit || true
+      - name: Install platform extras
+        shell: bash
+        run: |
+          case "${{ matrix.python_extras }}" in
+            windows) pip install pywinauto pygetwindow keyboard psutil ;;
+            macos)   pip install pyobjc-framework-AppKit psutil || pip install psutil ;;
+            linux)   pip install keyboard psutil ;;
+          esac
 
       - name: Build Python sidecar
+        shell: bash
         run: |
           python -m PyInstaller \
             --onefile \
