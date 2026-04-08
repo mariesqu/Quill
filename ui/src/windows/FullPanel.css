@@ -1,0 +1,439 @@
+/* ── Full Panel — Quill Studio ───────────────────────────────────────────────
+   Power-mode panel with sidebar navigation and full feature surface.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.full-panel {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  background: rgba(9, 9, 16, 0.93);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  box-shadow: var(--shadow-panel);
+  position: relative;
+}
+
+[data-theme="light"] .full-panel {
+  background: rgba(251, 251, 253, 0.95);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+/* Gradient top edge */
+.full-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(139,126,255,0.6), rgba(255,96,133,0.4), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+.full-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 14px;
+  height: 48px;
+  border-bottom: 1px solid var(--border-faint);
+  flex-shrink: 0;
+}
+
+.full-panel-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 80px;
+}
+
+.full-logo {
+  font-size: 15px;
+  background: var(--grad-violet-coral);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+
+.full-title {
+  font-size: var(--size-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+/* ── Tab navigation ──────────────────────────────────────────────────────── */
+.full-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  justify-content: center;
+}
+
+.full-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: var(--size-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.full-nav-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.full-nav-btn.active {
+  color: var(--violet);
+  background: var(--violet-dim);
+}
+
+.full-nav-label { font-size: var(--size-xs); }
+
+.full-panel-actions { display: flex; align-items: center; gap: 4px; min-width: 80px; justify-content: flex-end; }
+
+/* ── Content area ────────────────────────────────────────────────────────── */
+.full-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--gap-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Write tab ───────────────────────────────────────────────────────────── */
+.write-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+}
+
+.full-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--size-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: -4px;
+}
+
+.full-input-section { display: flex; flex-direction: column; gap: 6px; }
+
+.full-input-box {
+  padding: 10px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-md);
+  position: relative;
+  overflow: hidden;
+}
+.full-input-box::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--grad-violet-coral);
+}
+
+.full-input-text {
+  font-size: var(--size-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-left: 10px;
+}
+
+/* Empty state */
+.full-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-md);
+  padding: var(--gap-2xl);
+  color: var(--text-muted);
+  text-align: center;
+}
+.empty-icon {
+  font-size: 28px;
+  background: var(--grad-violet-coral);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0.4;
+}
+.full-empty-state p { font-size: var(--size-sm); }
+.full-empty-state kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  color: var(--text-secondary);
+}
+
+/* Language row */
+.full-lang-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+/* Instruction row */
+.full-instruction-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Mode grid — 5 columns */
+.full-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+/* Chain row */
+.full-chain-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* Suggestion */
+.full-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+
+/* Error */
+.full-error {
+  padding: 8px 12px;
+  background: rgba(255,96,133,0.08);
+  border: 1px solid rgba(255,96,133,0.2);
+  border-radius: var(--r-sm);
+  font-size: var(--size-xs);
+  color: var(--coral);
+}
+
+/* Output section */
+.full-output-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.full-output-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--size-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+
+.full-output-section .output-area { max-height: 260px; }
+
+/* Pronunciation */
+.full-pronunciation { padding: 4px 0; }
+.pronunciation-box {
+  padding: 8px 10px;
+  background: var(--mint-dim);
+  border: 1px solid rgba(61,214,168,0.2);
+  border-radius: var(--r-sm);
+  font-size: var(--size-sm);
+  font-family: var(--font-mono);
+  color: var(--mint);
+  line-height: 1.7;
+}
+
+/* Tutor explanation */
+.full-tutor-section { padding: 4px 0; }
+.tutor-explanation {
+  padding: 10px 12px;
+  background: var(--violet-dim);
+  border: 1px solid var(--violet-mid);
+  border-radius: var(--r-sm);
+  font-size: var(--size-sm);
+  line-height: 1.65;
+  color: var(--text-secondary);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ── History tab ─────────────────────────────────────────────────────────── */
+.history-tab { display: flex; flex-direction: column; gap: var(--gap-md); height: 100%; }
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-entry {
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: border-color var(--dur-fast);
+  cursor: pointer;
+}
+.history-entry:hover { border-color: var(--border-subtle); }
+.history-entry.expanded { border-color: var(--violet-mid); }
+
+.history-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+}
+
+.history-entry-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap-md);
+  padding: var(--gap-md);
+  background: var(--bg-input);
+  border-top: 1px solid var(--border-faint);
+}
+
+.history-col { display: flex; flex-direction: column; gap: 4px; }
+
+.history-explanation {
+  grid-column: 1 / -1;
+  padding: 8px;
+  background: var(--violet-dim);
+  border-radius: var(--r-sm);
+}
+
+/* ── Tutor tab ───────────────────────────────────────────────────────────── */
+.tutor-tab { display: flex; flex-direction: column; gap: var(--gap-lg); }
+
+.tutor-lesson-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.tutor-lesson-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px var(--gap-md);
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.tutor-lesson-body {
+  padding: var(--gap-md);
+  font-size: var(--size-sm);
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* ── Settings tab ────────────────────────────────────────────────────────── */
+.settings-tab { display: flex; flex-direction: column; height: 100%; }
+
+.settings-inner { display: flex; flex-direction: column; gap: 0; height: 100%; }
+
+.settings-nav {
+  display: flex;
+  gap: 2px;
+  padding-bottom: var(--gap-md);
+  border-bottom: 1px solid var(--border-faint);
+  margin-bottom: var(--gap-md);
+  flex-wrap: wrap;
+}
+
+.settings-nav-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: var(--size-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--dur-fast);
+}
+.settings-nav-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.settings-nav-btn.active { color: var(--violet); background: var(--violet-dim); }
+
+.settings-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+  flex: 1;
+}
+
+.settings-label {
+  display: flex;
+  align-items: center;
+  font-size: var(--size-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  gap: 4px;
+  margin-bottom: -6px;
+}
+
+/* Template rows */
+.template-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-sm);
+}
+
+.template-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-top: var(--gap-sm);
+  border-top: 1px solid var(--border-faint);
+}
+
+/* Active badge/button state */
+.btn.active {
+  background: var(--violet-dim) !important;
+  color: var(--violet) !important;
+  border-color: var(--violet-mid) !important;
+}

@@ -1,54 +1,42 @@
-import React, { useState, useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
-import Overlay from "./components/Overlay";
-import FirstRun from "./components/FirstRun";
-import Settings from "./components/Settings";
-import PermissionPrompt from "./components/PermissionPrompt";
-import TutorPanel from "./components/TutorPanel";
-import { useQuillBridge } from "./hooks/useQuillBridge";
+import { useState, useEffect } from 'react';
+import MiniOverlay from './windows/MiniOverlay';
+import FullPanel   from './windows/FullPanel';
+import FirstRun    from './components/FirstRun';
+import './styles/globals.css';
 
 export default function App() {
-  const [view, setView] = useState("overlay"); // overlay | firstrun | settings | permission | tutor
-  const bridge = useQuillBridge();
+  const [windowLabel, setWindowLabel] = useState(null);
+  const [setupDone, setSetupDone] = useState(
+    () => localStorage.getItem('quill_setup_complete') === 'true'
+  );
 
   useEffect(() => {
-    const hasSetup = localStorage.getItem("quill_setup_complete");
-    if (!hasSetup) setView("firstrun");
+    // Detect which Tauri window this webview belongs to
+    import('@tauri-apps/api/window')
+      .then(({ getCurrentWindow }) => {
+        setWindowLabel(getCurrentWindow().label);
+      })
+      .catch(() => setWindowLabel('mini'));
   }, []);
 
+  // Apply stored theme on mount
   useEffect(() => {
-    const unsubs = [
-      listen("quill://permission_required", (e) => {
-        if (e.payload === "accessibility") setView("permission");
-      }),
-      listen("quill://open_settings", () => setView("settings")),
-      listen("quill://open_tutor",    () => setView("tutor")),
-    ];
-    return () => unsubs.forEach((p) => p.then((fn) => fn()));
+    const theme = localStorage.getItem('quill_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
   }, []);
 
-  if (view === "firstrun") {
+  // Show first-run wizard if setup not complete
+  if (!setupDone) {
     return (
       <FirstRun onComplete={() => {
-        localStorage.setItem("quill_setup_complete", "true");
-        setView("overlay");
+        localStorage.setItem('quill_setup_complete', 'true');
+        setSetupDone(true);
       }} />
     );
   }
-  if (view === "permission") {
-    return <PermissionPrompt onDone={() => setView("overlay")} />;
-  }
-  if (view === "settings") {
-    return <Settings onClose={() => setView("overlay")} bridge={bridge} />;
-  }
-  if (view === "tutor") {
-    return <TutorPanel onClose={() => setView("overlay")} bridge={bridge} />;
-  }
 
-  return (
-    <Overlay
-      bridge={bridge}
-      onOpenTutor={() => setView("tutor")}
-    />
-  );
+  if (windowLabel === null) return null; // waiting for window label
+
+  if (windowLabel === 'full') return <FullPanel />;
+  return <MiniOverlay />;
 }

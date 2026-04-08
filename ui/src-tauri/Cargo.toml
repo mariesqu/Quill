@@ -1,6 +1,6 @@
 [package]
 name = "quill"
-version = "0.1.0"
+version = "0.2.0"
 description = "Privacy-first, model-agnostic AI writing assistant"
 authors = ["Quill Contributors"]
 license = "MIT"
@@ -8,18 +8,32 @@ repository = "https://github.com/mariesqu/Quill"
 edition = "2021"
 
 [build-dependencies]
-tauri-build = { version = "2.0", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0", features = ["tray-icon", "image-png"] }
-tauri-plugin-shell = "2.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tauri            = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-clipboard-manager = "2"
+serde            = { version = "1", features = ["derive"] }
+serde_json       = "1"
+serde_yaml       = "0.9"
+tokio            = { version = "1", features = ["full"] }
+reqwest          = { version = "0.12", features = ["stream", "json"] }
+futures-util     = "0.3"
+rusqlite         = { version = "0.31", features = ["bundled"] }
+async-trait      = "0.1"
+anyhow           = "1"
+dirs             = "5"
+once_cell        = "1"
+regex            = "1"
+arboard          = "3"
+enigo            = "0.2"
+tracing          = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.release]
-panic = "abort"
+panic         = "abort"
 codegen-units = 1
-lto = true
-opt-level = "s"
-strip = true
+lto           = true
+opt-level     = "s"
+strip         = true

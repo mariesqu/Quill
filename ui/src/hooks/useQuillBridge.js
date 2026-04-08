@@ -1,271 +1,231 @@
 /**
- * Central IPC bridge between React UI and Python sidecar.
- *
- * Python → Tauri events:
- *   show_overlay, stream_chunk, stream_done, chain_step,
- *   error, ready, smart_suggestion,
- *   tutor_explanation, tutor_lesson, history,
- *   favorite_toggled, export_data, comparison_done,
- *   pronunciation, clipboard_change, templates_updated
- *
- * Tauri → Python stdin (via invoke "send_to_python"):
- *   mode_selected, chain_selected, retry, replace_confirmed,
- *   dismissed, tutor_explain, generate_lesson, get_history,
- *   toggle_favorite, export_history, compare_modes,
- *   get_pronunciation, save_template, delete_template,
- *   ping, save_config
+ * useQuillBridge — central bridge between React UI and the Rust Tauri backend.
+ * Uses direct Tauri invoke() commands (no Python sidecar).
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
-const LS_LANGUAGE = "quill_output_language";
-const LS_THEME    = "quill_theme";
-
-export function loadPersistedTheme() {
-  return localStorage.getItem(LS_THEME) || "dark";
-}
-
-function loadPersistedLanguage() {
-  return localStorage.getItem(LS_LANGUAGE) || "auto";
-}
-
-async function sendToPython(msg) {
-  await invoke("send_to_python", { message: JSON.stringify(msg) });
-}
+const MAX_UNDO = 20;
 
 export function useQuillBridge() {
   // ── Overlay state ──────────────────────────────────────────────────────────
-  const [visible, setVisible]           = useState(false);
-  const [selectedText, setSelectedText] = useState("");
-  const [context, setContext]           = useState({});
-  const [modes, setModes]               = useState([]);
-  const [chains, setChains]             = useState([]);
-  const [activeMode, setActiveMode]     = useState(null);
-  const [streamedText, setStreamedText] = useState("");
-  const [isStreaming, setIsStreaming]   = useState(false);
-  const [isDone, setIsDone]             = useState(false);
-  const [error, setError]               = useState(null);
-  const [lastEntryId, setLastEntryId]   = useState(null);
-  const [chainProgress, setChainProgress] = useState(null);
-  const [suggestion, setSuggestion]     = useState(null);
+  const [visible,         setVisible]         = useState(false);
+  const [selectedText,    setSelectedText]     = useState('');
+  const [context,         setContext]          = useState({});
+  const [modes,           setModes]            = useState([]);
+  const [chains,          setChains]           = useState([]);
+  const [activeMode,      setActiveMode]       = useState(null);
+  const [streamedText,    setStreamedText]     = useState('');
+  const [isStreaming,     setIsStreaming]       = useState(false);
+  const [isDone,          setIsDone]           = useState(false);
+  const [error,           setError]            = useState(null);
+  const [lastEntryId,     setLastEntryId]      = useState(null);
+  const [chainProgress,   setChainProgress]    = useState(null);
+  const [suggestion,      setSuggestion]       = useState(null);
 
-  // ── Language picker ────────────────────────────────────────────────────────
-  const [outputLanguage, setOutputLanguageState] = useState(loadPersistedLanguage);
-  const setOutputLanguage = useCallback((lang) => {
-    localStorage.setItem(LS_LANGUAGE, lang);
-    setOutputLanguageState(lang);
-  }, []);
+  // ── Language & theme ───────────────────────────────────────────────────────
+  const [outputLanguage, setOutputLanguage] = useState(
+    () => localStorage.getItem('quill_output_language') || 'auto'
+  );
+  const [theme, setThemeState] = useState(
+    () => localStorage.getItem('quill_theme') || 'dark'
+  );
 
   // ── Undo stack ─────────────────────────────────────────────────────────────
-  const outputStack  = useRef([]); // [{text, mode, entryId}]
-  const activeModeRef = useRef(null); // mirrors activeMode state for use in event closures
+  const outputStack = useRef([]);
   const [canUndo, setCanUndo] = useState(false);
 
-  // ── Tutor state ────────────────────────────────────────────────────────────
+  // ── Tutor ──────────────────────────────────────────────────────────────────
   const [tutorExplanation, setTutorExplanation] = useState(null);
-  const [isExplaining, setIsExplaining]         = useState(false);
+  const [isExplaining,     setIsExplaining]     = useState(false);
 
-  // ── Comparison state ───────────────────────────────────────────────────────
-  const [comparisonResult, setComparisonResult] = useState(null); // {mode_a, result_a, mode_b, result_b}
-  const [isComparing, setIsComparing]           = useState(false);
-  const [compareMode, setCompareMode]           = useState(false); // UI toggle
+  // ── Comparison ────────────────────────────────────────────────────────────
+  const [comparisonResult, setComparisonResult] = useState(null);
+  const [isComparing,      setIsComparing]      = useState(false);
 
-  // ── Pronunciation state ────────────────────────────────────────────────────
-  const [pronunciation, setPronunciation]   = useState(null);
-  const [isPronouncing, setIsPronouncing]   = useState(false);
+  // ── Pronunciation ─────────────────────────────────────────────────────────
+  const [pronunciation,    setPronunciation]    = useState(null);
+  const [isPronouncing,    setIsPronouncing]    = useState(false);
 
-  // ── Clipboard notification ─────────────────────────────────────────────────
-  const [clipboardToast, setClipboardToast] = useState(null); // text | null
+  // ── Clipboard & Templates ─────────────────────────────────────────────────
+  const [clipboardToast,   setClipboardToast]  = useState(null);
+  const [templates,        setTemplates]       = useState([]);
 
-  // ── Templates ─────────────────────────────────────────────────────────────
-  const [templates, setTemplates] = useState([]);
+  // ── History ───────────────────────────────────────────────────────────────
+  const historyListeners  = useRef([]);
+  const tutorLsnListeners = useRef([]);
+  const tutorExpListeners = useRef([]);
+  const exportListeners   = useRef([]);
 
-  // ── Theme ─────────────────────────────────────────────────────────────────
-  const [theme, setThemeState] = useState(loadPersistedTheme);
-  const setTheme = useCallback((t) => {
-    localStorage.setItem(LS_THEME, t);
-    setThemeState(t);
-    document.documentElement.setAttribute("data-theme", t);
-  }, []);
+  // ── Active mode ref (for closures) ────────────────────────────────────────
+  const activeModeRef = useRef(null);
+  useEffect(() => { activeModeRef.current = activeMode; }, [activeMode]);
 
-  // Apply persisted theme on mount
+  // ── Apply theme ───────────────────────────────────────────────────────────
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('quill_theme', theme);
+  }, [theme]);
 
-  // External listener registries
-  const tutorLessonListeners  = useRef([]);
-  const tutorExplainListeners = useRef([]);
-  const historyListeners      = useRef([]);
-  const exportListeners       = useRef([]);
+  // ── Persist language ──────────────────────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem('quill_output_language', outputLanguage);
+  }, [outputLanguage]);
 
-  const streamBuffer = useRef("");
-
-  // ── Listen to Python events ────────────────────────────────────────────────
+  // ── Event listeners ───────────────────────────────────────────────────────
   useEffect(() => {
     const unsubs = [];
 
-    listen("quill://show_overlay", (e) => {
-      const { text, context, modes, chains } = e.payload;
-      setSelectedText(text);
-      setContext(context);
-      setModes(modes);
-      setChains(chains || []);
-      setActiveMode(null);
-      setStreamedText("");
+    // Load config on mount
+    invoke('get_config').then(cfg => {
+      if (cfg?.templates) setTemplates(cfg.templates);
+    }).catch(() => {});
+
+    listen('quill://show_overlay', e => {
+      const { text, context: ctx, modes: ms, chains: cs } = e.payload;
+      setSelectedText(text || '');
+      setContext(ctx || {});
+      setModes(ms || []);
+      setChains(cs || []);
+      setStreamedText('');
       setIsStreaming(false);
       setIsDone(false);
       setError(null);
-      setTutorExplanation(null);
+      setActiveMode(null);
       setChainProgress(null);
       setSuggestion(null);
+      setTutorExplanation(null);
       setComparisonResult(null);
-      setIsComparing(false);
       setPronunciation(null);
       outputStack.current = [];
       setCanUndo(false);
-      streamBuffer.current = "";
       setVisible(true);
-    }).then((fn) => unsubs.push(fn));
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://smart_suggestion", (e) => {
-      setSuggestion(e.payload);
-    }).then((fn) => unsubs.push(fn));
-
-    listen("quill://stream_chunk", (e) => {
-      streamBuffer.current += e.payload.chunk;
-      setStreamedText(streamBuffer.current);
+    listen('quill://stream_chunk', e => {
+      const { chunk } = e.payload;
+      setStreamedText(prev => prev + chunk);
       setIsStreaming(true);
-    }).then((fn) => unsubs.push(fn));
+      setIsDone(false);
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://stream_done", (e) => {
-      const text = e.payload.full_text;
-      const eid  = e.payload.entry_id;
-      setStreamedText(text);
+    listen('quill://stream_done', e => {
+      const { full_text, entry_id } = e.payload;
+      setStreamedText(full_text || '');
       setIsStreaming(false);
       setIsDone(true);
-      setChainProgress(null);
-      if (eid) setLastEntryId(eid);
-      // Push to undo stack — capture current mode via ref (safe in event closure)
-      outputStack.current = [
-        { text, mode: activeModeRef.current, entryId: eid },
-        ...outputStack.current,
-      ].slice(0, 20);
+      if (entry_id != null) setLastEntryId(entry_id);
+
+      // Push to undo stack
+      const frame = { text: full_text || '', mode: activeModeRef.current, entryId: entry_id };
+      outputStack.current = [frame, ...outputStack.current].slice(0, MAX_UNDO);
       setCanUndo(outputStack.current.length > 1);
-    }).then((fn) => unsubs.push(fn));
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://chain_step", (e) => {
+    listen('quill://chain_step', e => {
       setChainProgress(e.payload);
-      streamBuffer.current = "";
-      setStreamedText("");
-    }).then((fn) => unsubs.push(fn));
+      setStreamedText('');
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://error", (e) => {
-      setError(e.payload.message);
-      setIsStreaming(false);
-      setIsExplaining(false);
-      setIsComparing(false);
-      setIsPronouncing(false);
-    }).then((fn) => unsubs.push(fn));
+    listen('quill://smart_suggestion', e => {
+      setSuggestion(e.payload);
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://tutor_explanation", (e) => {
-      const { explanation, entry_id } = e.payload;
-      setTutorExplanation(explanation);
-      setIsExplaining(false);
-      tutorExplainListeners.current.forEach((fn) => fn(explanation, entry_id));
-    }).then((fn) => unsubs.push(fn));
-
-    listen("quill://tutor_lesson", (e) => {
-      const { lesson_md, period } = e.payload;
-      tutorLessonListeners.current.forEach((fn) => fn(lesson_md, period));
-    }).then((fn) => unsubs.push(fn));
-
-    listen("quill://history", (e) => {
-      // Call with (entries, null) — consistent two-arg signature
-      historyListeners.current.forEach((fn) => fn(e.payload.entries, null));
-    }).then((fn) => unsubs.push(fn));
-
-    listen("quill://favorite_toggled", (e) => {
-      const { entry_id, favorited } = e.payload;
-      // Call with (null, {entry_id, favorited}) — history listeners handle both cases
-      historyListeners.current.forEach((fn) => fn(null, { entry_id, favorited }));
-    }).then((fn) => unsubs.push(fn));
-
-    listen("quill://export_data", (e) => {
-      exportListeners.current.forEach((fn) => fn(e.payload.entries, e.payload.format));
-    }).then((fn) => unsubs.push(fn));
-
-    listen("quill://comparison_done", (e) => {
+    listen('quill://comparison_done', e => {
       setComparisonResult(e.payload);
       setIsComparing(false);
       setIsDone(true);
-    }).then((fn) => unsubs.push(fn));
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://pronunciation", (e) => {
+    listen('quill://pronunciation', e => {
       setPronunciation(e.payload.text);
       setIsPronouncing(false);
-    }).then((fn) => unsubs.push(fn));
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://clipboard_change", (e) => {
+    listen('quill://clipboard_change', e => {
       setClipboardToast(e.payload.text);
-    }).then((fn) => unsubs.push(fn));
+      setTimeout(() => setClipboardToast(null), 6000);
+    }).then(fn => unsubs.push(fn));
 
-    listen("quill://templates_updated", (e) => {
+    listen('quill://templates_updated', e => {
       setTemplates(e.payload.templates || []);
-    }).then((fn) => unsubs.push(fn));
+    }).then(fn => unsubs.push(fn));
 
-    return () => unsubs.forEach((fn) => fn());
+    listen('quill://error', e => {
+      setError(e.payload?.message || String(e.payload));
+      setIsStreaming(false);
+      setIsComparing(false);
+    }).then(fn => unsubs.push(fn));
+
+    listen('quill://tutor_explanation', e => {
+      setTutorExplanation(e.payload.explanation);
+      setIsExplaining(false);
+      tutorExpListeners.current.forEach(fn => fn(e.payload.explanation, e.payload.entry_id));
+    }).then(fn => unsubs.push(fn));
+
+    listen('quill://tutor_lesson', e => {
+      tutorLsnListeners.current.forEach(fn => fn(e.payload.lesson_md, e.payload.period));
+    }).then(fn => unsubs.push(fn));
+
+    listen('quill://history', e => {
+      historyListeners.current.forEach(fn => fn(e.payload.entries, e.payload.update));
+    }).then(fn => unsubs.push(fn));
+
+    listen('quill://favorite_toggled', e => {
+      historyListeners.current.forEach(fn => fn(null, e.payload));
+    }).then(fn => unsubs.push(fn));
+
+    listen('quill://export_data', e => {
+      exportListeners.current.forEach(fn => fn(e.payload.entries, e.payload.format));
+    }).then(fn => unsubs.push(fn));
+
+    return () => unsubs.forEach(fn => fn());
   }, []);
 
-  // ── Overlay actions ────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
 
-  const selectMode = useCallback(async (modeId, extraInstruction = "") => {
-    activeModeRef.current = modeId;
+  const selectMode = useCallback(async (modeId, extraInstruction) => {
     setActiveMode(modeId);
-    setStreamedText("");
+    setStreamedText('');
     setIsStreaming(true);
     setIsDone(false);
     setError(null);
-    setTutorExplanation(null);
     setComparisonResult(null);
+    setTutorExplanation(null);
     setPronunciation(null);
-    streamBuffer.current = "";
-    await sendToPython({
-      type: "mode_selected",
-      mode: modeId,
-      language: outputLanguage,
-      extra_instruction: extraInstruction,
-    });
+    try {
+      await invoke('execute_mode', {
+        mode: modeId,
+        language: outputLanguage,
+        extraInstruction: extraInstruction || null,
+      });
+    } catch (err) { setError(String(err)); setIsStreaming(false); }
   }, [outputLanguage]);
 
-  const selectChain = useCallback(async (chainId, extraInstruction = "") => {
-    activeModeRef.current = `chain:${chainId}`;
+  const selectChain = useCallback(async (chainId, extraInstruction) => {
     setActiveMode(`chain:${chainId}`);
-    setStreamedText("");
+    setStreamedText('');
     setIsStreaming(true);
     setIsDone(false);
     setError(null);
-    setTutorExplanation(null);
-    setComparisonResult(null);
-    streamBuffer.current = "";
-    await sendToPython({
-      type: "chain_selected",
-      chain_id: chainId,
-      language: outputLanguage,
-      extra_instruction: extraInstruction,
-    });
+    try {
+      await invoke('execute_chain', {
+        chainId,
+        language: outputLanguage,
+        extraInstruction: extraInstruction || null,
+      });
+    } catch (err) { setError(String(err)); setIsStreaming(false); }
   }, [outputLanguage]);
 
-  const retry = useCallback(async (extraInstruction = "") => {
-    setStreamedText("");
+  const retry = useCallback(async (extraInstruction) => {
+    setStreamedText('');
     setIsStreaming(true);
     setIsDone(false);
     setError(null);
-    setTutorExplanation(null);
-    setPronunciation(null);
-    streamBuffer.current = "";
-    await sendToPython({ type: "retry", extra_instruction: extraInstruction });
+    try {
+      await invoke('retry', { extraInstruction: extraInstruction || null });
+    } catch (err) { setError(String(err)); setIsStreaming(false); }
   }, []);
 
   const undo = useCallback(async () => {
@@ -275,163 +235,126 @@ export function useQuillBridge() {
     setStreamedText(prev.text);
     setIsDone(true);
     setCanUndo(outputStack.current.length > 1);
-    // Sync the undone text back to Python so replace_confirmed pastes the correct version
-    await sendToPython({ type: "set_result", text: prev.text });
+    // Sync undone text to Rust so confirm_replace pastes correctly
+    await invoke('set_result', { text: prev.text }).catch(() => {});
   }, []);
 
-  const compareModes = useCallback(async (modeA, modeB, extraInstruction = "") => {
+  const confirmReplace = useCallback(async () => {
+    try { await invoke('confirm_replace'); } catch (err) { setError(String(err)); }
+  }, []);
+
+  const dismiss = useCallback(async () => {
+    setVisible(false);
+    setIsStreaming(false);
+    try { await invoke('dismiss'); } catch { /* ignore */ }
+  }, []);
+
+  const setResultText = useCallback(async (text) => {
+    setStreamedText(text);
+    await invoke('set_result', { text }).catch(() => {});
+  }, []);
+
+  const compareModes = useCallback(async (modeA, modeB, extraInstruction) => {
     setIsComparing(true);
     setComparisonResult(null);
-    setError(null);
-    await sendToPython({
-      type: "compare_modes",
-      mode_a: modeA,
-      mode_b: modeB,
-      language: outputLanguage,
-      extra_instruction: extraInstruction,
-    });
+    try {
+      await invoke('compare_modes_cmd', {
+        modeA, modeB,
+        language: outputLanguage,
+        extraInstruction: extraInstruction || null,
+      });
+    } catch (err) { setError(String(err)); setIsComparing(false); }
   }, [outputLanguage]);
 
   const getPronunciation = useCallback(async (text, language) => {
     setIsPronouncing(true);
-    setPronunciation(null);
-    await sendToPython({ type: "get_pronunciation", text, language });
+    try {
+      await invoke('get_pronunciation', { text, language });
+    } catch (err) { setError(String(err)); setIsPronouncing(false); }
   }, []);
-
-  const setResultText = useCallback(async (text) => {
-    await sendToPython({ type: "set_result", text });
-  }, []);
-
-  const confirmReplace = useCallback(async () => {
-    await sendToPython({ type: "replace_confirmed" });
-    setVisible(false);
-  }, []);
-
-  const dismiss = useCallback(async () => {
-    await sendToPython({ type: "dismissed" });
-    setVisible(false);
-    setActiveMode(null);
-    setStreamedText("");
-    setIsStreaming(false);
-    setIsDone(false);
-    setTutorExplanation(null);
-    setComparisonResult(null);
-    setPronunciation(null);
-    setCompareMode(false);
-  }, []);
-
-  // ── Tutor actions ──────────────────────────────────────────────────────────
 
   const requestTutorExplain = useCallback(async (entryId) => {
     setIsExplaining(true);
-    setTutorExplanation(null);
-    await sendToPython({ type: "tutor_explain", entry_id: entryId ?? lastEntryId });
-  }, [lastEntryId]);
-
-  const generateLesson = useCallback(async (period = "daily") => {
-    await sendToPython({ type: "generate_lesson", period });
+    try { await invoke('request_tutor_explain', { entryId: entryId ?? null }); }
+    catch (err) { setError(String(err)); setIsExplaining(false); }
   }, []);
 
-  const getHistory = useCallback(async (limit = 50, language = null) => {
-    await sendToPython({ type: "get_history", limit, language });
+  const generateLesson = useCallback(async (period) => {
+    try { await invoke('generate_lesson', { period }); }
+    catch (err) { setError(String(err)); }
   }, []);
 
-  const tutorExplain = useCallback(async (entryId) => {
-    await sendToPython({ type: "tutor_explain", entry_id: entryId });
+  const getHistory = useCallback(async (limit, language) => {
+    try { await invoke('get_history', { limit: limit ?? 50, language: language ?? null }); }
+    catch (err) { setError(String(err)); }
   }, []);
-
-  // ── Favorites ──────────────────────────────────────────────────────────────
 
   const toggleFavorite = useCallback(async (entryId) => {
-    await sendToPython({ type: "toggle_favorite", entry_id: entryId });
+    try { await invoke('toggle_favorite', { entryId }); }
+    catch (err) { setError(String(err)); }
   }, []);
 
-  // ── Export ─────────────────────────────────────────────────────────────────
-
-  const exportHistory = useCallback(async (format = "json") => {
-    await sendToPython({ type: "export_history", format });
+  const exportHistory = useCallback(async (format) => {
+    try { await invoke('export_history', { format }); }
+    catch (err) { setError(String(err)); }
   }, []);
-
-  // ── Templates ──────────────────────────────────────────────────────────────
 
   const saveTemplate = useCallback(async (name, mode, instruction) => {
-    await sendToPython({ type: "save_template", name, mode, instruction });
+    try { await invoke('save_template', { name, mode, instruction }); }
+    catch (err) { setError(String(err)); }
   }, []);
 
   const deleteTemplate = useCallback(async (name) => {
-    await sendToPython({ type: "delete_template", name });
+    try { await invoke('delete_template', { name }); }
+    catch (err) { setError(String(err)); }
   }, []);
 
-  const dismissClipboardToast = useCallback(() => setClipboardToast(null), []);
-
-  // ── External subscriptions (for TutorPanel) ────────────────────────────────
-
-  const onTutorLesson = useCallback((fn) => {
-    tutorLessonListeners.current.push(fn);
-    return () => {
-      tutorLessonListeners.current = tutorLessonListeners.current.filter((f) => f !== fn);
-    };
+  const saveConfig = useCallback(async (configUpdate) => {
+    try { await invoke('save_config', { configUpdate }); }
+    catch (err) { setError(String(err)); }
   }, []);
 
-  const onTutorExplanation = useCallback((fn) => {
-    tutorExplainListeners.current.push(fn);
-    return () => {
-      tutorExplainListeners.current = tutorExplainListeners.current.filter((f) => f !== fn);
-    };
+  const openFullPanel = useCallback(async () => {
+    try { await invoke('open_full_panel'); } catch { /* ignore */ }
   }, []);
 
-  const onHistory = useCallback((fn) => {
-    historyListeners.current.push(fn);
-    return () => {
-      historyListeners.current = historyListeners.current.filter((f) => f !== fn);
-    };
+  const closeFullPanel = useCallback(async () => {
+    try { await invoke('close_full_panel'); } catch { /* ignore */ }
   }, []);
 
-  const onExportData = useCallback((fn) => {
-    exportListeners.current.push(fn);
-    return () => {
-      exportListeners.current = exportListeners.current.filter((f) => f !== fn);
-    };
-  }, []);
+  const setTheme = useCallback((t) => { setThemeState(t); }, []);
 
-  const saveConfig = useCallback(async (config) => {
-    await sendToPython({ type: "save_config", config });
-  }, []);
+  const setLanguage = useCallback((lang) => { setOutputLanguage(lang); }, []);
+
+  // ── Subscription helpers for panels ───────────────────────────────────────
+  const onHistory        = useCallback(fn => { historyListeners.current.push(fn);  return () => { historyListeners.current  = historyListeners.current.filter(f => f !== fn); }; }, []);
+  const onTutorLesson    = useCallback(fn => { tutorLsnListeners.current.push(fn); return () => { tutorLsnListeners.current = tutorLsnListeners.current.filter(f => f !== fn); }; }, []);
+  const onTutorExplanation = useCallback(fn => { tutorExpListeners.current.push(fn); return () => { tutorExpListeners.current = tutorExpListeners.current.filter(f => f !== fn); }; }, []);
+  const onExportData     = useCallback(fn => { exportListeners.current.push(fn);   return () => { exportListeners.current   = exportListeners.current.filter(f => f !== fn); }; }, []);
 
   return {
-    // Overlay state
+    // State
     visible, selectedText, context, modes, chains,
-    activeMode, streamedText, isStreaming, isDone,
-    error, lastEntryId, chainProgress, suggestion,
-    // Language
-    outputLanguage, setOutputLanguage,
-    // Undo
-    canUndo, undo,
-    // Tutor state
+    activeMode, streamedText, isStreaming, isDone, error,
+    lastEntryId, chainProgress, suggestion,
+    outputLanguage, theme,
+    canUndo,
     tutorExplanation, isExplaining,
-    // Comparison
-    comparisonResult, isComparing, compareMode, setCompareMode, compareModes,
-    // Pronunciation
-    pronunciation, isPronouncing, getPronunciation,
-    // Clipboard
-    clipboardToast, dismissClipboardToast,
-    // Templates
-    templates, saveTemplate, deleteTemplate,
-    // Theme
-    theme, setTheme,
-    // Overlay actions
-    selectMode, selectChain, retry,
-    setResultText, confirmReplace, dismiss,
-    // Tutor actions
+    comparisonResult, isComparing,
+    pronunciation, isPronouncing,
+    clipboardToast, templates,
+
+    // Actions
+    selectMode, selectChain, retry, undo,
+    confirmReplace, dismiss, setResultText,
+    compareModes, getPronunciation,
     requestTutorExplain, generateLesson,
-    getHistory, tutorExplain,
-    // Favorites
-    toggleFavorite,
-    // Export
-    exportHistory,
-    // External subscriptions
-    onTutorLesson, onTutorExplanation, onHistory, onExportData,
-    // Config
-    saveConfig,
+    getHistory, toggleFavorite, exportHistory,
+    saveTemplate, deleteTemplate, saveConfig,
+    openFullPanel, closeFullPanel,
+    setTheme, setLanguage,
+
+    // Subscriptions
+    onHistory, onTutorLesson, onTutorExplanation, onExportData,
   };
 }
