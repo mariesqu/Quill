@@ -42,24 +42,28 @@ Works with any AI model — cloud or fully local. Free and open-source (MIT).
 
 ## Quick Start
 
-### Linux
+### Download a release
+
+Grab the latest installer for your OS from the [Releases page](https://github.com/mariesqu/Quill/releases):
+
+- **Windows** — `Quill_x.y.z_x64-setup.exe` (MSI / NSIS installer)
+- **macOS** — `Quill_x.y.z_universal.dmg`
+- **Linux** — `quill_x.y.z_amd64.AppImage` or `.deb`
+
+> ⚠️ macOS requires **Accessibility permission** on first run — Quill will guide you through it.
+
+### Build from source
+
 ```bash
-bash scripts/install-linux.sh
-quill
+git clone https://github.com/mariesqu/Quill
+cd Quill/ui
+npm install
+npm run tauri dev          # hot-reload dev build
+# or
+npm run tauri build        # production bundle in ui/src-tauri/target/release/bundle/
 ```
 
-### macOS
-```bash
-bash scripts/install-macos.sh
-quill
-```
-> ⚠️ macOS requires **Accessibility permission** on first run. Quill will guide you through it.
-
-### Windows (PowerShell)
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
-quill
-```
+Prerequisites: [Rust](https://rustup.rs) (stable) and Node.js 18+. Tauri's [prerequisites page](https://v2.tauri.app/start/prerequisites/) covers per-OS system dependencies (webkit2gtk on Linux, Xcode CLT on macOS, WebView2 on Windows — usually already installed).
 
 On first launch a **setup wizard** walks you through choosing a provider and entering your API key. You can change everything later in Settings.
 
@@ -409,64 +413,55 @@ Custom modes and chains appear immediately in the overlay after saving — no re
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- Rust + Cargo ([rustup.rs](https://rustup.rs))
+- [Rust](https://rustup.rs) (stable, edition 2021)
+- Node.js 18+ and npm
+- Tauri system dependencies — follow [v2.tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/):
+  - **Windows** — Microsoft C++ Build Tools + WebView2 (Edge ships with it)
+  - **macOS** — Xcode Command Line Tools
+  - **Linux** — `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `libgtk-3-dev`, `libxdo-dev`, `patchelf`
 
-### Install and run
+### Run in development
 
 ```bash
-# Clone
 git clone https://github.com/mariesqu/Quill
 cd Quill
 
-# Python deps
-pip install -e ".[dev]"        # installs core + dev extras
-
-# Add your API key
+# Copy default config and add your API key
 cp config/default.yaml config/user.yaml
 # Edit config/user.yaml and set api_key
 
-# Terminal 1 — Python core (sidecar)
-python -m core.main
-
-# Terminal 2 — Tauri dev server
 cd ui
 npm install
-npm run tauri dev
+npm run tauri dev              # launches the app with hot-reload
 ```
 
-### Platform-specific extras
+Tauri builds the Rust backend (`ui/src-tauri/`) and serves the React frontend (`ui/src/`) from Vite. The first build downloads and compiles every crate — allow a few minutes.
 
-**macOS:**
+### Quality gates
+
 ```bash
-pip install pyobjc-framework-AppKit
+cd ui/src-tauri
+cargo fmt --all -- --check     # formatting
+cargo clippy --all-targets -- -D warnings
+cargo test --all-features
+cargo check                    # fast type check without building
 ```
 
-**Linux:**
+Frontend:
 ```bash
-sudo apt install xdotool xclip
-pip install keyboard
-```
-
-**Windows:**
-```bash
-pip install pywinauto pygetwindow keyboard
-```
-
-### Tests
-
-```bash
-pytest                        # all tests (platform tests auto-skipped)
-pytest tests/test_prompt_builder.py -v
-pytest tests/test_providers.py -v
+cd ui
+npm run build                  # Vite production build
 ```
 
 ### Build for distribution
 
 ```bash
-bash scripts/build.sh
+cd ui
+npm run tauri build
 # Output: ui/src-tauri/target/release/bundle/
+#   - Windows: .msi / .exe
+#   - macOS:   .dmg / .app
+#   - Linux:   .AppImage / .deb
 ```
 
 ---
@@ -475,15 +470,15 @@ bash scripts/build.sh
 
 | Feature | Windows | macOS | Linux (X11) | Linux (Wayland) |
 |---|---|---|---|---|
-| Global hotkey | `keyboard` lib | `pynput` | `pynput` | ⚠️ limited |
-| Text capture | UIA + clipboard | Accessibility API + clipboard | xclip PRIMARY + clipboard | clipboard only |
-| Active app detection | pygetwindow + psutil | AppKit NSWorkspace | xdotool + psutil | psutil only |
-| Paste back | Ctrl+V | Cmd+V | Ctrl+V | Ctrl+V |
+| Global hotkey | `tauri-plugin-global-shortcut` | `tauri-plugin-global-shortcut` | `tauri-plugin-global-shortcut` | ⚠️ limited |
+| Text capture | clipboard simulation (`arboard`) | clipboard simulation (`arboard`) | clipboard simulation (`arboard`) | clipboard only |
+| Active app detection | Win32 API | `osascript` | `xdotool` | limited |
+| Paste back | `enigo` → Ctrl+V | `enigo` → Cmd+V | `enigo` → Ctrl+V | `enigo` → Ctrl+V |
 | Permissions needed | None | Accessibility ⚠️ | None | None |
-| Installer | `.exe` | `.dmg` | `.AppImage` / `.deb` | — |
+| Installer | `.msi` / `.exe` | `.dmg` / `.app` | `.AppImage` / `.deb` | — |
 
 **macOS — Accessibility permission:**
-Required so Quill can read selected text from other apps. On first run, Quill shows a step-by-step guide:
+Required so Quill can simulate paste-back via `enigo`. On first run, Quill shows a step-by-step guide:
 1. Click "Open System Settings"
 2. Find Quill in the Accessibility list
 3. Toggle it ON
@@ -492,10 +487,10 @@ Required so Quill can read selected text from other apps. On first run, Quill sh
 This is a macOS OS-level requirement — it cannot be bypassed.
 
 **Linux — xdotool:**
-If `xdotool` is not installed, Quill falls back to clipboard-only capture (works everywhere, slightly slower). Install for best experience: `sudo apt install xdotool xclip`
+Used for active-app detection. If not installed, Quill still works but context-aware tone defaults are disabled. Install for best experience: `sudo apt install xdotool xclip`
 
 **Linux — Wayland:**
-Global hotkeys and window focus detection are fundamentally restricted on Wayland by design. X11 is recommended for Phase 1. Wayland support is on the Phase 4 roadmap.
+Global hotkeys and window focus detection are fundamentally restricted on Wayland by design. X11 is recommended. Wayland support depends on upstream `tauri-plugin-global-shortcut` improvements.
 
 ---
 
@@ -508,29 +503,32 @@ Global hotkeys and window focus detection are fundamentally restricted on Waylan
 └────────────────────────┬────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────┐
-│        Platform Abstraction (platform_/)        │
-│  capture/ │ context/ │ hotkey/ │ replace/       │
-│  Windows · macOS · Linux backends               │
+│   Platform Abstraction (src-tauri/src/platform) │
+│  capture.rs  │  context.rs  │  replace.rs       │
+│  Win32 · osascript · xdotool backends           │
 └────────────────────────┬────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────┐
-│           Core Engine (Python 3.11+)            │
-│  main.py · config_loader · prompt_builder       │
-│  history · tutor · streamer                     │
+│         Core Engine (Rust — src-tauri/src)      │
+│  engine.rs · core/{config,modes,prompt,         │
+│    history,tutor,clipboard}.rs · providers/     │
+│  Single native binary — no Python, no sidecar   │
 └────────────────────────┬────────────────────────┘
-                         │ JSON over stdio (sidecar IPC)
+                         │  tauri::command + events
 ┌────────────────────────▼────────────────────────┐
-│         Overlay UI (Tauri v2 + React)           │
-│  Overlay · DiffView · TutorPanel · Settings     │
-│  FirstRun wizard · PermissionPrompt             │
+│         Overlay UI (Tauri v2 + React 18)        │
+│  windows/MiniOverlay · windows/FullPanel        │
+│  DiffView · ComparisonView · FirstRun           │
 └─────────────────────────────────────────────────┘
 ```
 
-- **Core:** Python 3.11+, async streaming via `httpx`
-- **UI:** Tauri v2 + React, dark glassmorphism design, ~8MB binary
-- **IPC:** Newline-delimited JSON over stdio (Python sidecar ↔ Tauri)
-- **History:** SQLite at `~/.quill/history.db`, opt-in
-- **Config:** YAML — human-editable, diff-able, version-controllable
+- **Backend:** Rust (edition 2021) compiled into the Tauri binary — no sidecar, no external process. Async streaming via `reqwest` + `futures-util`.
+- **UI:** Tauri v2 + React 18 two-window design (`mini` 380×560 quick-access overlay, `full` 600×740 studio panel).
+- **IPC:** Direct `tauri::command` invocations + typed events (`quill://stream_chunk`, `quill://stream_done`, etc.). No JSON-over-stdio, no Python.
+- **Providers:** `Provider` trait with OpenRouter, OpenAI, Ollama, and generic OpenAI-compatible implementations — all with real SSE streaming.
+- **History:** Bundled SQLite via `rusqlite` (no system dependency) at `~/.quill/history.db`, opt-in.
+- **Config:** YAML (`config/default.yaml`, `config/user.yaml`) — human-editable, diff-able, env-overridable.
+- **Key crates:** `tauri`, `tauri-plugin-global-shortcut`, `tauri-plugin-clipboard-manager`, `reqwest`, `tokio`, `rusqlite`, `serde_yaml`, `arboard`, `enigo`, `anyhow`, `tracing`.
 
 ---
 

@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---|---|
-| 0.1.x (latest) | Yes |
+| 0.2.x (latest) | Yes |
 
 ---
 
@@ -47,7 +47,7 @@ Quill is designed with privacy as a first principle:
 - **No telemetry** — no analytics, no crash reporting, no usage tracking
 - **API keys** stored only in `config/user.yaml` (gitignored) or environment variables — never transmitted anywhere except your chosen AI provider
 - **History** stored locally in `~/.quill/history.db` — opt-in, never synced
-- **IPC** is stdin/stdout between Tauri and the Python sidecar — no network socket
+- **No IPC surface** — all logic runs inside a single Tauri binary (Rust backend + React frontend). No sidecar, no stdin/stdout channel, no local network socket
 - **Text you transform** is sent only to the AI provider you explicitly configured
 
 ---
