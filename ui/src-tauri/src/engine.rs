@@ -151,12 +151,11 @@ fn show_mini_overlay(
             "suggestion": suggestion_payload,
         }),
     );
-
-    // Show the mini window
-    if let Some(w) = app.get_webview_window("mini") {
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
+    // Window show/focus is handled by the MiniOverlay frontend after React
+    // renders the content. Showing from Rust before the JS event is processed
+    // causes a transparent-window flash (empty window appears, then content
+    // animates in from opacity:0). Letting the frontend call window.show()
+    // means the window only becomes visible once content is already painted.
 }
 
 // ── Mode execution ────────────────────────────────────────────────────────────

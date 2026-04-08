@@ -123,6 +123,14 @@ fn main() {
             let hotkey_str = { engine.lock().unwrap().config.hotkey.clone() };
             if let Err(err) = register_hotkey(&handle, engine.clone(), hotkey_str.as_deref()) {
                 eprintln!("[hotkey] registration failed: {err}");
+                // The error toast was already emitted via quill://error by
+                // register_hotkey, but the mini window is hidden and only
+                // shows errors when visible. Open the full panel so the
+                // user can see the conflict message and fix it in Settings.
+                if let Some(w) = handle.get_webview_window("full") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
             }
 
             // ── Emit templates on startup ─────────────────────────────────────

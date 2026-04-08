@@ -46,10 +46,27 @@ export default function MiniOverlay() {
   const instructionRef = useRef(instruction);
   useEffect(() => { instructionRef.current = instruction; }, [instruction]);
 
-  // Hide window when not visible
+  // Show/hide the OS window in sync with React's `visible` state.
+  //
+  // We intentionally call window.show() HERE (from JS, after React has
+  // rendered the content) rather than from the Rust handle_hotkey path.
+  // Calling w.show() in Rust before the IPC event reaches the JS means the
+  // transparent window appears EMPTY for ~50-100 ms before React renders,
+  // and the bounce-in animation starts from opacity:0 while the window is
+  // already visible — producing a jarring transparent flash. Calling
+  // show() here guarantees the window is only made visible once the
+  // overlay content is already in the DOM and the animation has begun.
   useEffect(() => {
-    if (!visible) { windowRef.current.hide().catch(() => {}); }
-    else { setShowDiff(false); setChosenText(null); setInstruction(''); setShowInstInput(false); }
+    if (!visible) {
+      windowRef.current.hide().catch(() => {});
+    } else {
+      setShowDiff(false);
+      setChosenText(null);
+      setInstruction('');
+      setShowInstInput(false);
+      windowRef.current.show().catch(() => {});
+      windowRef.current.setFocus().catch(() => {});
+    }
   }, [visible]);
 
   // Auto-scroll output
