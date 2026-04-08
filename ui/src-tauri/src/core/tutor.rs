@@ -1,7 +1,6 @@
 use super::history::HistoryStats;
 
-pub const EXPLAIN_SYSTEM: &str =
-    "You are a knowledgeable and encouraging language tutor. \
+pub const EXPLAIN_SYSTEM: &str = "You are a knowledgeable and encouraging language tutor. \
      Your job is to explain writing improvements concisely and educationally. \
      Be specific, practical, and warm. Never patronise. \
      Focus on rules and principles the user can apply themselves next time.";
@@ -19,7 +18,8 @@ pub fn build_explain_prompt(original: &str, output: &str, mode: &str, language: 
         String::new()
     };
 
-    format!(r#"You transformed the following text using "{mode}" mode.{lang_note}
+    format!(
+        r#"You transformed the following text using "{mode}" mode.{lang_note}
 
 ORIGINAL:
 {original}
@@ -32,7 +32,8 @@ Please explain:
 2. One practical tip the writer can apply themselves next time.
 3. If a language translation was involved, highlight one interesting linguistic difference between the source and target language that this example illustrates.
 
-Keep it concise — 3–5 short paragraphs max. Use plain language, not jargon."#)
+Keep it concise — 3–5 short paragraphs max. Use plain language, not jargon."#
+    )
 }
 
 pub fn build_lesson_prompt(stats: &HistoryStats, period: &str) -> String {
@@ -50,16 +51,38 @@ pub fn build_lesson_prompt(stats: &HistoryStats, period: &str) -> String {
     let mode_breakdown: String = {
         let mut pairs: Vec<_> = stats.mode_counts.iter().collect();
         pairs.sort_by(|a, b| b.1.cmp(a.1));
-        pairs.iter().map(|(m, c)| format!("{m}: {c}")).collect::<Vec<_>>().join(", ")
+        pairs
+            .iter()
+            .map(|(m, c)| format!("{m}: {c}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     };
     let lang_breakdown: String = {
-        let mut pairs: Vec<_> = stats.lang_counts.iter().filter(|(l, _)| l.as_str() != "auto").collect();
+        let mut pairs: Vec<_> = stats
+            .lang_counts
+            .iter()
+            .filter(|(l, _)| l.as_str() != "auto")
+            .collect();
         pairs.sort_by(|a, b| b.1.cmp(a.1));
-        pairs.iter().map(|(l, c)| format!("{l}: {c}")).collect::<Vec<_>>().join(", ")
+        pairs
+            .iter()
+            .map(|(l, c)| format!("{l}: {c}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     };
-    let samples_block: String = stats.sample_originals.iter().zip(stats.sample_outputs.iter())
+    let samples_block: String = stats
+        .sample_originals
+        .iter()
+        .zip(stats.sample_outputs.iter())
         .enumerate()
-        .map(|(i, (orig, out))| format!("\nExample {}:\n  Before: {}\n  After:  {}", i + 1, orig, out))
+        .map(|(i, (orig, out))| {
+            format!(
+                "\nExample {}:\n  Before: {}\n  After:  {}",
+                i + 1,
+                orig,
+                out
+            )
+        })
         .collect();
 
     let lang_focus = if !top_lang.is_empty() && top_lang != "auto" {
@@ -75,7 +98,8 @@ pub fn build_lesson_prompt(stats: &HistoryStats, period: &str) -> String {
         String::new()
     };
 
-    format!(r#"Generate a {period} writing lesson for this user based on their Quill usage over the last {period_label}.
+    format!(
+        r#"Generate a {period} writing lesson for this user based on their Quill usage over the last {period_label}.
 
 USAGE SUMMARY:
 - Total transformations: {count}
@@ -102,12 +126,15 @@ FORMAT your lesson as:
 {lang_corner}
 
 Keep the whole lesson under 250 words. Be encouraging and specific."#,
-        count       = stats.count,
+        count = stats.count,
         top_mode_count = stats.mode_counts.get(top_mode).copied().unwrap_or(0),
-        avg_pct     = (stats.avg_reduction * 100.0) as i64,
-        period_cap  = {
+        avg_pct = (stats.avg_reduction * 100.0) as i64,
+        period_cap = {
             let mut c = period.chars();
-            c.next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_default() + c.as_str()
+            c.next()
+                .map(|ch| ch.to_uppercase().to_string())
+                .unwrap_or_default()
+                + c.as_str()
         },
     )
 }

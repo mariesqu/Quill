@@ -1,25 +1,24 @@
-use anyhow::Result;
-use dirs::home_dir;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use super::config::Config;
 
+/// Built-in mode and chain definitions — embedded at compile time from `config/modes.yaml`.
+/// User custom modes/chains from `user.yaml` are merged on top.
+const MODES_YAML: &str = include_str!("../../../../config/modes.yaml");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModeConfig {
-    pub label:  String,
-    pub icon:   String,
+    pub label: String,
+    pub icon: String,
     pub prompt: String,
-    #[serde(default)]
-    pub hotkey: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainConfig {
-    pub label:       String,
-    pub icon:        String,
-    pub steps:       Vec<String>,
+    pub label: String,
+    pub icon: String,
+    pub steps: Vec<String>,
     #[serde(default)]
     pub description: String,
 }
@@ -27,11 +26,11 @@ pub struct ChainConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct ModesFile {
     #[serde(default)]
-    modes:         HashMap<String, ModeConfig>,
+    modes: HashMap<String, ModeConfig>,
     #[serde(default)]
-    chains:        HashMap<String, ChainConfig>,
+    chains: HashMap<String, ChainConfig>,
     #[serde(default)]
-    custom_modes:  HashMap<String, ModeConfig>,
+    custom_modes: HashMap<String, ModeConfig>,
     #[serde(default)]
     custom_chains: HashMap<String, ChainConfig>,
 }
@@ -39,35 +38,22 @@ struct ModesFile {
 /// Flat representation sent to the UI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModeInfo {
-    pub id:    String,
+    pub id: String,
     pub label: String,
-    pub icon:  String,
+    pub icon: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainInfo {
-    pub id:          String,
-    pub label:       String,
-    pub icon:        String,
-    pub steps:       Vec<String>,
+    pub id: String,
+    pub label: String,
+    pub icon: String,
+    pub steps: Vec<String>,
     pub description: String,
 }
 
-fn modes_yaml_path() -> PathBuf {
-    let repo_cfg = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap_or(&PathBuf::from("."))
-        .parent().unwrap_or(&PathBuf::from("."))
-        .join("config").join("modes.yaml");
-    if repo_cfg.exists() {
-        return repo_cfg;
-    }
-    home_dir().unwrap_or_default().join(".quill").join("config").join("modes.yaml")
-}
-
 pub fn load_modes(cfg: &Config) -> (HashMap<String, ModeConfig>, HashMap<String, ChainConfig>) {
-    let path = modes_yaml_path();
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
-    let mut file: ModesFile = serde_yaml::from_str(&text).unwrap_or_default();
+    let mut file: ModesFile = serde_yaml::from_str(MODES_YAML).unwrap_or_default();
 
     // Merge custom modes from user config
     for (id, raw) in &cfg.custom_modes {
@@ -81,37 +67,62 @@ pub fn load_modes(cfg: &Config) -> (HashMap<String, ModeConfig>, HashMap<String,
         }
     }
 
-    // Apply per-mode hotkeys from config
-    for (mode_id, hotkey) in &cfg.mode_hotkeys {
-        if let Some(m) = file.modes.get_mut(mode_id) {
-            m.hotkey = Some(hotkey.clone());
-        }
-    }
-
     (file.modes, file.chains)
 }
 
 pub fn modes_list(modes: &HashMap<String, ModeConfig>) -> Vec<ModeInfo> {
     // Preserve canonical order
-    const ORDER: &[&str] = &["rewrite", "translate", "coach", "shorter", "formal", "fix_grammar", "expand"];
-    let mut list: Vec<ModeInfo> = ORDER.iter()
-        .filter_map(|id| modes.get(*id).map(|m| ModeInfo { id: id.to_string(), label: m.label.clone(), icon: m.icon.clone() }))
+    const ORDER: &[&str] = &[
+        "rewrite",
+        "translate",
+        "coach",
+        "shorter",
+        "formal",
+        "fix_grammar",
+        "expand",
+    ];
+    let mut list: Vec<ModeInfo> = ORDER
+        .iter()
+        .filter_map(|id| {
+            modes.get(*id).map(|m| ModeInfo {
+                id: id.to_string(),
+                label: m.label.clone(),
+                icon: m.icon.clone(),
+            })
+        })
         .collect();
-    // Append any custom modes not in the canonical order
-    for (id, m) in modes {
-        if !ORDER.contains(&id.as_str()) {
-            list.push(ModeInfo { id: id.clone(), label: m.label.clone(), icon: m.icon.clone() });
-        }
+    // Append any custom modes not in the canonical order, sorted by id for
+    // a deterministic UI across process restarts (HashMap iteration order is
+    // randomised by default).
+    let mut custom: Vec<(&String, &ModeConfig)> = modes
+        .iter()
+        .filter(|(id, _)| !ORDER.contains(&id.as_str()))
+        .collect();
+    custom.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (id, m) in custom {
+        list.push(ModeInfo {
+            id: id.clone(),
+            label: m.label.clone(),
+            icon: m.icon.clone(),
+        });
     }
     list
 }
 
 pub fn chains_list(chains: &HashMap<String, ChainConfig>) -> Vec<ChainInfo> {
-    chains.iter().map(|(id, c)| ChainInfo {
-        id:          id.clone(),
-        label:       c.label.clone(),
-        icon:        c.icon.clone(),
-        steps:       c.steps.clone(),
-        description: c.description.clone(),
-    }).collect()
+    // Sort by id so the chain row has a stable order across launches.
+    // Iterating a HashMap directly gives non-deterministic order, which made
+    // custom chains shuffle between process restarts.
+    let mut sorted: Vec<(&String, &ChainConfig)> = chains.iter().collect();
+    sorted.sort_by(|(a, _), (b, _)| a.cmp(b));
+    sorted
+        .into_iter()
+        .map(|(id, c)| ChainInfo {
+            id: id.clone(),
+            label: c.label.clone(),
+            icon: c.icon.clone(),
+            steps: c.steps.clone(),
+            description: c.description.clone(),
+        })
+        .collect()
 }

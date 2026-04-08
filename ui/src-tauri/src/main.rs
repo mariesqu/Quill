@@ -7,32 +7,33 @@ mod platform;
 mod providers;
 
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::Ordering;
 
-use tauri::{AppHandle, Emitter, Manager};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri::{AppHandle, Emitter, Manager};
 
-use core::config::load_config;
-use core::history::init_db;
-use core::modes::load_modes;
 use core::clipboard::start_clipboard_monitor;
-use engine::{Engine, SharedEngine, handle_hotkey};
+use core::config::{config_is_usable, load_config};
+use core::history::init_db;
+use core::hotkey::register_hotkey;
+use core::modes::load_modes;
+use engine::{Engine, SharedEngine};
 
 fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let show     = MenuItem::with_id(app, "show",     "Show Quill",      true, None::<&str>)?;
-    let panel    = MenuItem::with_id(app, "panel",    "Open Full Panel…", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…",       true, None::<&str>)?;
-    let sep      = tauri::menu::PredefinedMenuItem::separator(app)?;
-    let quit     = MenuItem::with_id(app, "quit",     "Quit Quill",      true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Show Quill", true, None::<&str>)?;
+    let panel = MenuItem::with_id(app, "panel", "Open Full Panel…", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Quill", true, None::<&str>)?;
     Menu::with_items(app, &[&show, &panel, &settings, &sep, &quit])
 }
 
 fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env()
-            .add_directive("quill=info".parse().unwrap()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("quill=info".parse().unwrap()),
+        )
         .init();
 
     let cfg = load_config();
@@ -40,14 +41,15 @@ fn main() {
 
     // Init history DB if enabled
     if cfg.history.enabled {
-        if let Err(e) = init_db() { eprintln!("[history] init error: {e}"); }
+        if let Err(e) = init_db() {
+            eprintln!("[history] init error: {e}");
+        }
     }
 
     let engine: SharedEngine = Arc::new(Mutex::new(Engine::new(cfg, modes, chains)));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(engine.clone())
         .invoke_handler(tauri::generate_handler![
             commands::execute_mode,
@@ -55,6 +57,7 @@ fn main() {
             commands::retry,
             commands::confirm_replace,
             commands::set_result,
+            commands::set_selected_text,
             commands::dismiss,
             commands::open_full_panel,
             commands::close_full_panel,
@@ -68,7 +71,6 @@ fn main() {
             commands::save_config,
             commands::save_template,
             commands::delete_template,
-            commands::open_accessibility_settings,
             commands::get_config,
         ])
         .setup(move |app| {
@@ -81,8 +83,10 @@ fn main() {
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
-                        button_state: MouseButtonState::Up, ..
-                    } = event {
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         let app = tray.app_handle();
                         if let Some(w) = app.get_webview_window("mini") {
                             let _ = w.show();
@@ -116,28 +120,18 @@ fn main() {
                 .build(app)?;
 
             // ── Global hotkey ─────────────────────────────────────────────────
-            let hotkey_str = {
-                engine.lock().unwrap().config.hotkey.clone()
-            };
-
-            let shortcut = parse_hotkey(hotkey_str.as_deref());
-            let engine_hk = engine.clone();
-            let handle_hk = handle.clone();
-
-            app.handle().global_shortcut().on_shortcut(shortcut, move |_app, _sc, event| {
-                if event.state() == ShortcutState::Pressed {
-                    let eng = engine_hk.clone();
-                    let app = handle_hk.clone();
-                    tauri::async_runtime::spawn(async move {
-                        handle_hotkey(eng, app).await;
-                    });
-                }
-            })?;
+            let hotkey_str = { engine.lock().unwrap().config.hotkey.clone() };
+            if let Err(err) = register_hotkey(&handle, engine.clone(), hotkey_str.as_deref()) {
+                eprintln!("[hotkey] registration failed: {err}");
+            }
 
             // ── Emit templates on startup ─────────────────────────────────────
             {
                 let templates = engine.lock().unwrap().config.templates.clone();
-                let _ = handle.emit("quill://templates_updated", serde_json::json!({"templates": templates}));
+                let _ = handle.emit(
+                    "quill://templates_updated",
+                    serde_json::json!({"templates": templates}),
+                );
             }
 
             // ── Clipboard monitor ─────────────────────────────────────────────
@@ -147,65 +141,33 @@ fn main() {
 
             tauri::async_runtime::spawn(async move {
                 while let Some(text) = rx.recv().await {
-                    let _ = handle_cm.emit("quill://clipboard_change", serde_json::json!({"text": text}));
+                    let _ = handle_cm.emit(
+                        "quill://clipboard_change",
+                        serde_json::json!({"text": text}),
+                    );
                 }
             });
+
+            // ── First-run bootstrap ───────────────────────────────────────────
+            // If the config is not usable (missing provider, or missing API key
+            // for a non-local provider), force-open the Full Panel window so
+            // the FirstRun wizard is reachable. We intentionally check the
+            // EFFECTIVE config — a stale or half-written `user.yaml` that
+            // merely EXISTS is not enough; the user still needs the wizard.
+            //
+            // Without this, a fresh user (or one with an incomplete config)
+            // presses Ctrl+Shift+Space → only the mini window shows →
+            // `App.jsx` renders null because setup isn't complete → the wizard
+            // (which only renders in the full window) is unreachable.
+            if !config_is_usable(&engine.lock().unwrap().config) {
+                if let Some(w) = handle.get_webview_window("full") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
 
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("Quill failed to start");
-}
-
-/// Parse a hotkey string like "ctrl+shift+space" into a Tauri Shortcut.
-fn parse_hotkey(s: Option<&str>) -> Shortcut {
-    let s = s.unwrap_or("");
-
-    // Detect OS default
-    #[cfg(target_os = "macos")]
-    let default_modifiers = Modifiers::META | Modifiers::SHIFT;
-    #[cfg(not(target_os = "macos"))]
-    let default_modifiers = Modifiers::CONTROL | Modifiers::SHIFT;
-
-    if s.is_empty() {
-        return Shortcut::new(Some(default_modifiers), Code::Space);
-    }
-
-    let lower = s.to_lowercase();
-    let parts: Vec<&str> = lower.split('+').map(str::trim).collect();
-
-    let mut modifiers = Modifiers::empty();
-    let mut code = Code::Space;
-
-    for part in &parts {
-        match *part {
-            "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
-            "cmd" | "meta"     => modifiers |= Modifiers::META,
-            "shift"            => modifiers |= Modifiers::SHIFT,
-            "alt" | "option"   => modifiers |= Modifiers::ALT,
-            key => {
-                code = match key {
-                    "space" => Code::Space,
-                    "a"..="z" => {
-                        let c = key.chars().next().unwrap();
-                        match c {
-                            'a' => Code::KeyA, 'b' => Code::KeyB, 'c' => Code::KeyC,
-                            'd' => Code::KeyD, 'e' => Code::KeyE, 'f' => Code::KeyF,
-                            'g' => Code::KeyG, 'h' => Code::KeyH, 'i' => Code::KeyI,
-                            'j' => Code::KeyJ, 'k' => Code::KeyK, 'l' => Code::KeyL,
-                            'm' => Code::KeyM, 'n' => Code::KeyN, 'o' => Code::KeyO,
-                            'p' => Code::KeyP, 'q' => Code::KeyQ, 'r' => Code::KeyR,
-                            's' => Code::KeyS, 't' => Code::KeyT, 'u' => Code::KeyU,
-                            'v' => Code::KeyV, 'w' => Code::KeyW, 'x' => Code::KeyX,
-                            'y' => Code::KeyY, 'z' => Code::KeyZ,
-                            _ => Code::Space,
-                        }
-                    }
-                    _ => Code::Space,
-                };
-            }
-        }
-    }
-
-    Shortcut::new(if modifiers.is_empty() { None } else { Some(modifiers) }, code)
 }

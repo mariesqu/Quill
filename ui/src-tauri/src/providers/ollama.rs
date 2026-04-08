@@ -1,23 +1,22 @@
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
-use reqwest::Client;
 use serde_json::{json, Value};
 
+use super::{ChunkStream, Provider, HTTP_CLIENT};
 use crate::core::config::Config;
-use super::{ChunkStream, Provider};
 
 pub struct OllamaProvider {
-    client:   Client,
-    model:    String,
+    model: String,
     base_url: String,
 }
 
 impl OllamaProvider {
     pub fn new(cfg: &Config) -> Self {
         Self {
-            client:   Client::new(),
-            model:    cfg.model.clone(),
-            base_url: cfg.base_url.clone()
+            model: cfg.model.clone(),
+            base_url: cfg
+                .base_url
+                .clone()
                 .unwrap_or_else(|| "http://localhost:11434".into()),
         }
     }
@@ -34,7 +33,7 @@ impl Provider for OllamaProvider {
             "stream": true,
         });
 
-        let resp = self.client
+        let resp = HTTP_CLIENT
             .post(&url)
             .json(&body)
             .send()
@@ -47,16 +46,23 @@ impl Provider for OllamaProvider {
             return Err(format!("Ollama error (HTTP {status}): {body}"));
         }
 
+        // Byte-buffered line reader — identical reasoning to `openai_sse_stream`:
+        // we never decode partial UTF-8 sequences, which would otherwise corrupt
+        // non-Latin characters split across HTTP chunk boundaries.
         let text_stream = stream::unfold(
-            (resp.bytes_stream(), String::new()),
+            (resp.bytes_stream(), Vec::<u8>::new()),
             |(mut stream, mut buf)| async move {
                 loop {
-                    if let Some(nl) = buf.find('\n') {
-                        let line = buf[..nl].to_string();
-                        buf = buf[nl + 1..].to_string();
+                    if let Some(nl) = buf.iter().position(|&b| b == b'\n') {
+                        let line_bytes: Vec<u8> = buf.drain(..=nl).collect();
+                        let line = std::str::from_utf8(&line_bytes[..line_bytes.len() - 1])
+                            .unwrap_or("")
+                            .to_string();
 
                         if let Ok(json) = serde_json::from_str::<Value>(&line) {
-                            if json["done"].as_bool().unwrap_or(false) { return None; }
+                            if json["done"].as_bool().unwrap_or(false) {
+                                return None;
+                            }
                             if let Some(token) = json["response"].as_str() {
                                 if !token.is_empty() {
                                     return Some((token.to_string(), (stream, buf)));
@@ -67,7 +73,7 @@ impl Provider for OllamaProvider {
                     }
 
                     match stream.next().await {
-                        Some(Ok(bytes)) => buf.push_str(&String::from_utf8_lossy(&bytes)),
+                        Some(Ok(bytes)) => buf.extend_from_slice(&bytes),
                         _ => return None,
                     }
                 }

@@ -1,25 +1,24 @@
 // Generic OpenAI-compatible provider — for LM Studio, Groq, Jan.ai, etc.
 use async_trait::async_trait;
-use reqwest::Client;
 use serde_json::json;
 
+use super::{friendly_error, openai_sse_stream, ChunkStream, Provider, HTTP_CLIENT};
 use crate::core::config::Config;
-use super::{ChunkStream, Provider, friendly_error, openai_sse_stream};
 
 pub struct GenericProvider {
-    client:   Client,
-    model:    String,
-    api_key:  String,
+    model: String,
+    api_key: String,
     base_url: String,
 }
 
 impl GenericProvider {
     pub fn new(cfg: &Config) -> Self {
         Self {
-            client:   Client::new(),
-            model:    cfg.model.clone(),
-            api_key:  cfg.api_key.clone().unwrap_or_default(),
-            base_url: cfg.base_url.clone()
+            model: cfg.model.clone(),
+            api_key: cfg.api_key.clone().unwrap_or_default(),
+            base_url: cfg
+                .base_url
+                .clone()
                 .unwrap_or_else(|| "http://localhost:1234/v1".into()),
         }
     }
@@ -38,12 +37,15 @@ impl Provider for GenericProvider {
             ]
         });
 
-        let mut req = self.client.post(&url).json(&body);
+        let mut req = HTTP_CLIENT.post(&url).json(&body);
         if !self.api_key.is_empty() {
             req = req.bearer_auth(&self.api_key);
         }
 
-        let resp = req.send().await.map_err(|e| format!("Network error: {e}"))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {e}"))?;
 
         if !resp.status().is_success() {
             let status = resp.status().as_u16();

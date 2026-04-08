@@ -1,13 +1,11 @@
 use async_trait::async_trait;
-use reqwest::Client;
 use serde_json::json;
 
+use super::{friendly_error, openai_sse_stream, ChunkStream, Provider, HTTP_CLIENT};
 use crate::core::config::Config;
-use super::{ChunkStream, Provider, friendly_error, openai_sse_stream};
 
 pub struct OpenRouterProvider {
-    client:  Client,
-    model:   String,
+    model: String,
     api_key: String,
     base_url: String,
 }
@@ -15,10 +13,11 @@ pub struct OpenRouterProvider {
 impl OpenRouterProvider {
     pub fn new(cfg: &Config) -> Self {
         Self {
-            client:  Client::new(),
-            model:   cfg.model.clone(),
+            model: cfg.model.clone(),
             api_key: cfg.api_key.clone().unwrap_or_default(),
-            base_url: cfg.base_url.clone()
+            base_url: cfg
+                .base_url
+                .clone()
                 .unwrap_or_else(|| "https://openrouter.ai/api/v1".into()),
         }
     }
@@ -37,7 +36,7 @@ impl Provider for OpenRouterProvider {
             ]
         });
 
-        let resp = self.client
+        let resp = HTTP_CLIENT
             .post(&url)
             .bearer_auth(&self.api_key)
             .header("HTTP-Referer", "https://github.com/mariesqu/Quill")
