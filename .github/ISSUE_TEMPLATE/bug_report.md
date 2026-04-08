@@ -30,14 +30,22 @@ What actually happened. Include any error messages shown in the overlay.
 | Field | Value |
 |---|---|
 | OS | e.g. macOS 14.4 / Windows 11 / Ubuntu 24.04 |
-| Quill version | e.g. 0.1.0 |
+| Quill version | e.g. 0.2.0 |
+| Install type | release installer / built from source |
 | Provider | e.g. OpenRouter / Ollama / OpenAI |
 | Model | e.g. google/gemma-3-27b-it |
-| Python version | e.g. 3.11.9 |
 
 ## Logs
 
-Run `python -m core.main` in a terminal and paste any relevant output here:
+Run Quill from a terminal with tracing enabled and paste any relevant output:
+
+```bash
+# From a release install
+RUST_LOG=quill=debug quill
+
+# Or from source
+cd ui && RUST_LOG=quill=debug npm run tauri dev
+```
 
 ```
 paste logs here

@@ -26,8 +26,10 @@ Closes #
 
 ## Checklist
 
-- [ ] `pytest` passes
-- [ ] `ruff check .` passes
+- [ ] `cargo fmt --all -- --check` passes
+- [ ] `cargo clippy --all-targets -- -D warnings` passes
+- [ ] `cargo test --all-features` passes
+- [ ] `npm run build` (in `ui/`) passes
 - [ ] Tested on my OS (specify: ___)
 - [ ] No API keys or secrets in the diff
 - [ ] Documentation updated if needed
