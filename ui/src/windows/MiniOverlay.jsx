@@ -38,6 +38,14 @@ export default function MiniOverlay() {
   const inputRef   = useRef(null);
   const windowRef  = useRef(getCurrentWindow());
 
+  // `instruction` is refreshed on every keystroke. We read it from a ref
+  // inside the keydown handler (below) instead of from closure, so the
+  // listener can be attached ONCE per overlay session instead of being
+  // torn down and re-attached on every character typed in the instruction
+  // field.
+  const instructionRef = useRef(instruction);
+  useEffect(() => { instructionRef.current = instruction; }, [instruction]);
+
   // Hide window when not visible
   useEffect(() => {
     if (!visible) { windowRef.current.hide().catch(() => {}); }
@@ -51,31 +59,42 @@ export default function MiniOverlay() {
     }
   }, [streamedText, isStreaming]);
 
+  // `handleModeClick` reads instruction from the ref for the same reason as
+  // the keydown handler — we want stable references so number-key shortcuts
+  // and on-click handlers see the latest instruction value.
+  const handleModeClick = useCallback((modeId) => {
+    setChosenText(null);
+    selectMode(modeId, instructionRef.current || undefined);
+  }, [selectMode]);
+
   // Keyboard shortcuts
+  //
+  // The listener is attached ONCE per visible session (not per keystroke).
+  // It reads the current `instruction` via `instructionRef.current` so the
+  // closure doesn't need to be re-created as the user types — eliminates
+  // the attach/detach churn on every character.
   useEffect(() => {
     const handleKey = (e) => {
       if (!visible) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
-      if (key === 'escape')                   { e.preventDefault(); dismiss(); }
-      if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); }
-      if (key === 'r' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); retry(); }
+      if (key === 'escape')                   { e.preventDefault(); dismiss(); return; }
+      if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); return; }
+      if (key === 'r' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); retry(instructionRef.current || undefined); return; }
       const idx = parseInt(key) - 1;
       if (idx >= 0 && idx < modes.length)     { e.preventDefault(); handleModeClick(modes[idx].id); }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [visible, modes, dismiss, undo, retry]);
+  }, [visible, modes, dismiss, undo, retry, handleModeClick]);
 
-  const handleModeClick = useCallback((modeId) => {
-    setChosenText(null);
-    selectMode(modeId, instruction || undefined);
-  }, [selectMode, instruction]);
-
+  // Read `instruction` from the ref (same as handleModeClick) so this
+  // callback has a stable identity — it doesn't need to rebuild on every
+  // keystroke in the instruction field.
   const handleChainClick = useCallback((chainId) => {
     setChosenText(null);
-    selectChain(chainId, instruction || undefined);
-  }, [selectChain, instruction]);
+    selectChain(chainId, instructionRef.current || undefined);
+  }, [selectChain]);
 
   const handleReplace = useCallback(() => {
     if (chosenText) { bridge.setResultText(chosenText).then(() => bridge.confirmReplace()); }
@@ -215,7 +234,7 @@ export default function MiniOverlay() {
       {error && (
         <div className="mini-error animate-slide-up">
           <span>⚠️ {error}</span>
-          <button className="btn btn-icon" style={{fontSize:11}} onClick={() => bridge.setError?.(null)}>✕</button>
+          <button className="btn btn-icon" style={{fontSize:11}} onClick={() => bridge.clearError()}>✕</button>
         </div>
       )}
 
@@ -291,7 +310,7 @@ export default function MiniOverlay() {
           <button
             className="btn btn-ghost"
             style={{fontSize:11, padding:'2px 8px', marginLeft:'auto'}}
-            onClick={() => bridge.setSelectedText?.(clipboardToast)}
+            onClick={() => bridge.promoteClipboardToast(clipboardToast)}
           >Use</button>
         </div>
       )}

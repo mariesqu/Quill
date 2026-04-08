@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { invalidateConfigCache } from "../common/configCache";
 import "../styles/firstrun.css";
 
 const PROVIDERS = [
@@ -49,6 +51,8 @@ export default function FirstRun({ onComplete }) {
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState(MODEL_DEFAULTS["openrouter"]);
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const provider = PROVIDERS.find((p) => p.id === selectedProvider);
   const needsKey = ["openrouter", "openai"].includes(selectedProvider);
@@ -65,12 +69,25 @@ export default function FirstRun({ onComplete }) {
     if (step === 0) {
       setStep(1);
     } else if (step === 1) {
-      // Save config via bridge (or localStorage for now)
-      const config = { provider: selectedProvider, model };
-      if (apiKey) config.api_key = apiKey;
-      if (baseUrl) config.base_url = baseUrl;
-      localStorage.setItem("quill_config_pending", JSON.stringify(config));
-      setStep(2);
+      setSaveError(null);
+      setSaving(true);
+      try {
+        const configUpdate = { provider: selectedProvider, model };
+        if (apiKey) configUpdate.api_key = apiKey;
+        if (baseUrl) configUpdate.base_url = baseUrl;
+        // Persist to ~/.quill/config/user.yaml via the Rust backend.
+        await invoke("save_config", { configUpdate });
+        // Invalidate the shared config cache — App.jsx's mount effect already
+        // populated it with the empty pre-wizard config, and any subsequent
+        // consumer (useQuillBridge, SettingsPanel) would otherwise see the
+        // stale snapshot instead of the values we just persisted.
+        invalidateConfigCache();
+        setStep(2);
+      } catch (err) {
+        setSaveError(String(err));
+      } finally {
+        setSaving(false);
+      }
     } else {
       onComplete();
     }
@@ -246,12 +263,22 @@ export default function FirstRun({ onComplete }) {
           <div className="firstrun-privacy">
             🔒 Your API key is stored locally only
           </div>
+          {saveError && (
+            <div style={{
+              color: "var(--color-error, #f87171)",
+              fontSize: 12,
+              maxWidth: 320,
+              textAlign: "right",
+            }}>
+              Failed to save: {saveError}
+            </div>
+          )}
           <button
             className="btn-continue"
             onClick={handleContinue}
-            disabled={!canContinue}
+            disabled={!canContinue || saving}
           >
-            {step === 2 ? "Start Writing →" : "Continue →"}
+            {saving ? "Saving…" : step === 2 ? "Start Writing →" : "Continue →"}
           </button>
         </div>
       </div>

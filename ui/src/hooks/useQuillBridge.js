@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { loadConfigOnce, invalidateConfigCache } from '../common/configCache';
 
 const MAX_UNDO = 20;
 
@@ -51,6 +52,11 @@ export function useQuillBridge() {
   // ── Clipboard & Templates ─────────────────────────────────────────────────
   const [clipboardToast,   setClipboardToast]  = useState(null);
   const [templates,        setTemplates]       = useState([]);
+  // Pending auto-dismiss timer for the clipboard toast. Tracked in a ref so
+  // rapid successive clipboard events don't leak timers or race each other
+  // (the previous setTimeout could otherwise fire and clear the CURRENT toast
+  // prematurely, and timers could fire after unmount).
+  const clipboardToastTimerRef = useRef(null);
 
   // ── History ───────────────────────────────────────────────────────────────
   const historyListeners  = useRef([]);
@@ -75,15 +81,28 @@ export function useQuillBridge() {
 
   // ── Event listeners ───────────────────────────────────────────────────────
   useEffect(() => {
+    // `listen()` is async — it returns a Promise<UnlistenFn>. If the component
+    // unmounts before that Promise resolves (Strict Mode, HMR, fast logout),
+    // we need the resolved callback to be invoked anyway. We track a single
+    // `cancelled` flag and, in each `.then`, either push to `unsubs` (still
+    // alive) or call the unlisten immediately (unmounted in the meantime).
+    let cancelled = false;
     const unsubs = [];
+    const track = (p) =>
+      p.then((fn) => {
+        if (cancelled) fn();
+        else unsubs.push(fn);
+      });
 
-    // Load config on mount
-    invoke('get_config').then(cfg => {
+    // Load config on mount via the shared memoised cache so App.jsx and
+    // useQuillBridge don't both hit the Rust backend on startup.
+    loadConfigOnce().then(cfg => {
+      if (cancelled) return;
       if (cfg?.templates) setTemplates(cfg.templates);
     }).catch(() => {});
 
-    listen('quill://show_overlay', e => {
-      const { text, context: ctx, modes: ms, chains: cs } = e.payload;
+    track(listen('quill://show_overlay', e => {
+      const { text, context: ctx, modes: ms, chains: cs, suggestion: sug } = e.payload;
       setSelectedText(text || '');
       setContext(ctx || {});
       setModes(ms || []);
@@ -94,23 +113,30 @@ export function useQuillBridge() {
       setError(null);
       setActiveMode(null);
       setChainProgress(null);
-      setSuggestion(null);
+      // Suggestion is part of the show_overlay payload now (folded in by
+      // the Rust side) — previously it came as a separate event emitted
+      // BEFORE show_overlay, so this listener's reset was wiping it.
+      setSuggestion(sug || null);
       setTutorExplanation(null);
       setComparisonResult(null);
       setPronunciation(null);
+      // Clear the prior selection's history id so consumers (Tutor "Explain
+      // this" button, etc.) don't resolve to an unrelated entry after a
+      // clipboard-toast promotion or fresh hotkey trigger.
+      setLastEntryId(null);
       outputStack.current = [];
       setCanUndo(false);
       setVisible(true);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://stream_chunk', e => {
+    track(listen('quill://stream_chunk', e => {
       const { chunk } = e.payload;
       setStreamedText(prev => prev + chunk);
       setIsStreaming(true);
       setIsDone(false);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://stream_done', e => {
+    track(listen('quill://stream_done', e => {
       const { full_text, entry_id } = e.payload;
       setStreamedText(full_text || '');
       setIsStreaming(false);
@@ -121,66 +147,80 @@ export function useQuillBridge() {
       const frame = { text: full_text || '', mode: activeModeRef.current, entryId: entry_id };
       outputStack.current = [frame, ...outputStack.current].slice(0, MAX_UNDO);
       setCanUndo(outputStack.current.length > 1);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://chain_step', e => {
+    track(listen('quill://chain_step', e => {
       setChainProgress(e.payload);
       setStreamedText('');
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://smart_suggestion', e => {
-      setSuggestion(e.payload);
-    }).then(fn => unsubs.push(fn));
-
-    listen('quill://comparison_done', e => {
+    track(listen('quill://comparison_done', e => {
       setComparisonResult(e.payload);
       setIsComparing(false);
       setIsDone(true);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://pronunciation', e => {
+    track(listen('quill://pronunciation', e => {
       setPronunciation(e.payload.text);
       setIsPronouncing(false);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://clipboard_change', e => {
+    track(listen('quill://clipboard_change', e => {
       setClipboardToast(e.payload.text);
-      setTimeout(() => setClipboardToast(null), 6000);
-    }).then(fn => unsubs.push(fn));
+      // Cancel any pending dismiss so the fresh toast always gets its full
+      // 6-second window instead of being cut short by a stale timer.
+      if (clipboardToastTimerRef.current) {
+        clearTimeout(clipboardToastTimerRef.current);
+      }
+      clipboardToastTimerRef.current = setTimeout(() => {
+        setClipboardToast(null);
+        clipboardToastTimerRef.current = null;
+      }, 6000);
+    }));
 
-    listen('quill://templates_updated', e => {
+    track(listen('quill://templates_updated', e => {
       setTemplates(e.payload.templates || []);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://error', e => {
+    track(listen('quill://error', e => {
       setError(e.payload?.message || String(e.payload));
       setIsStreaming(false);
       setIsComparing(false);
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://tutor_explanation', e => {
+    track(listen('quill://tutor_explanation', e => {
       setTutorExplanation(e.payload.explanation);
       setIsExplaining(false);
       tutorExpListeners.current.forEach(fn => fn(e.payload.explanation, e.payload.entry_id));
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://tutor_lesson', e => {
+    track(listen('quill://tutor_lesson', e => {
       tutorLsnListeners.current.forEach(fn => fn(e.payload.lesson_md, e.payload.period));
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://history', e => {
+    track(listen('quill://history', e => {
       historyListeners.current.forEach(fn => fn(e.payload.entries, e.payload.update));
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://favorite_toggled', e => {
+    track(listen('quill://favorite_toggled', e => {
       historyListeners.current.forEach(fn => fn(null, e.payload));
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    listen('quill://export_data', e => {
+    track(listen('quill://export_data', e => {
       exportListeners.current.forEach(fn => fn(e.payload.entries, e.payload.format));
-    }).then(fn => unsubs.push(fn));
+    }));
 
-    return () => unsubs.forEach(fn => fn());
+    return () => {
+      cancelled = true;
+      unsubs.forEach(fn => fn());
+      // Cancel any pending clipboard-toast auto-dismiss timer so it doesn't
+      // fire on an unmounted component (React 18 Strict Mode catches this,
+      // but it's still a leak in prod).
+      if (clipboardToastTimerRef.current) {
+        clearTimeout(clipboardToastTimerRef.current);
+        clipboardToastTimerRef.current = null;
+      }
+    };
   }, []);
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -310,8 +350,13 @@ export function useQuillBridge() {
   }, []);
 
   const saveConfig = useCallback(async (configUpdate) => {
-    try { await invoke('save_config', { configUpdate }); }
-    catch (err) { setError(String(err)); }
+    try {
+      await invoke('save_config', { configUpdate });
+      // Invalidate the shared config cache so any subsequent `loadConfigOnce`
+      // reads see the freshly-persisted values instead of the stale in-flight
+      // promise from startup.
+      invalidateConfigCache();
+    } catch (err) { setError(String(err)); }
   }, []);
 
   const openFullPanel = useCallback(async () => {
@@ -325,6 +370,39 @@ export function useQuillBridge() {
   const setTheme = useCallback((t) => { setThemeState(t); }, []);
 
   const setLanguage = useCallback((lang) => { setOutputLanguage(lang); }, []);
+
+  // ── Clear transient UI state ──────────────────────────────────────────────
+  const clearError       = useCallback(() => setError(null), []);
+  const clearComparison  = useCallback(() => setComparisonResult(null), []);
+
+  // Promote a clipboard-monitor toast into a fresh overlay session. Used by
+  // the "Use" button in MiniOverlay's clipboard toast.
+  //
+  // The Rust `set_selected_text` command handles EVERYTHING atomically:
+  //   - updates `engine.last_text` (so subsequent mode invocations
+  //     transform the new text, not the stale hotkey-captured value),
+  //   - resets `last_result` / `last_entry_id` / `last_mode` / `last_app_hint`
+  //     so `retry` doesn't silently run a stale mode against fresh text,
+  //   - emits a full `quill://show_overlay` payload with `modes` + `chains`,
+  //   - shows + focuses the mini window.
+  //
+  // The existing `show_overlay` listener already resets all React state, so
+  // all this hook has to do is clear the toast and kick off the invoke.
+  const promoteClipboardToast = useCallback(async (text) => {
+    if (!text) return;
+    // Cancel the pending auto-dismiss timer before clearing the toast —
+    // otherwise it fires 6s later with a redundant setClipboardToast(null).
+    if (clipboardToastTimerRef.current) {
+      clearTimeout(clipboardToastTimerRef.current);
+      clipboardToastTimerRef.current = null;
+    }
+    setClipboardToast(null);
+    try {
+      await invoke('set_selected_text', { text });
+    } catch (err) {
+      setError(String(err));
+    }
+  }, []);
 
   // ── Subscription helpers for panels ───────────────────────────────────────
   const onHistory        = useCallback(fn => { historyListeners.current.push(fn);  return () => { historyListeners.current  = historyListeners.current.filter(f => f !== fn); }; }, []);
@@ -353,6 +431,7 @@ export function useQuillBridge() {
     saveTemplate, deleteTemplate, saveConfig,
     openFullPanel, closeFullPanel,
     setTheme, setLanguage,
+    clearError, clearComparison, promoteClipboardToast,
 
     // Subscriptions
     onHistory, onTutorLesson, onTutorExplanation, onExportData,

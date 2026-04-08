@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuillBridge }       from '../hooks/useQuillBridge';
+import { loadConfigOnce }       from '../common/configCache';
 import { fleschKincaid, gradeLabel } from '../utils/readability';
 import { detectLanguage }       from '../utils/detectLanguage';
 import DiffView                 from '../components/DiffView';
@@ -42,6 +43,7 @@ export default function FullPanel() {
     toggleFavorite, exportHistory,
     saveTemplate, deleteTemplate, saveConfig,
     closeFullPanel, setLanguage, setTheme,
+    clearComparison,
     onHistory, onTutorLesson, onExportData,
   } = bridge;
 
@@ -61,10 +63,6 @@ export default function FullPanel() {
   // Tutor state
   const [lessons,      setLessons]      = useState({});
   const [lessonLoading,setLessonLoading]= useState(null);
-
-  // Settings state
-  const [config, setConfig] = useState(null);
-  const [configDirty, setConfigDirty] = useState(false);
 
   const outputRef = useRef(null);
 
@@ -95,9 +93,6 @@ export default function FullPanel() {
   // Load initial data when tab changes
   useEffect(() => {
     if (tab === 'history') getHistory(100);
-    if (tab === 'settings') {
-      bridge.invoke?.('get_config').then(cfg => setConfig(cfg)).catch(() => {});
-    }
   }, [tab]);
 
   // Auto-scroll output
@@ -107,17 +102,31 @@ export default function FullPanel() {
     }
   }, [streamedText, isStreaming]);
 
-  // Keyboard shortcuts (write tab)
+  // Keyboard shortcuts — Write tab only.
+  // Escape works from any tab (close panel).
+  // Mode-number / undo / retry are gated to the Write tab so that pressing
+  // `r` or `Cmd+R` from History/Tutor/Settings doesn't accidentally fire
+  // retry and re-run the last AI transformation.
   useEffect(() => {
     const handleKey = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       const key = e.key.toLowerCase();
-      if (key === 'escape')                   { closeFullPanel(); }
-      if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); }
-      if (key === 'r' && !e.ctrlKey)          { retry(); }
+
+      // Panel-wide shortcuts
+      if (key === 'escape') { closeFullPanel(); return; }
+
+      // Write-tab-only shortcuts below
       if (tab !== 'write') return;
+
+      if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); return; }
+      // Plain `r` only — never Ctrl+R or Cmd+R (those are reload reflexes).
+      if (key === 'r' && !e.ctrlKey && !e.metaKey) { retry(instruction || undefined); return; }
+
       const idx = parseInt(key) - 1;
-      if (idx >= 0 && idx < modes.length)     { e.preventDefault(); selectMode(modes[idx].id, instruction || undefined); }
+      if (idx >= 0 && idx < modes.length) {
+        e.preventDefault();
+        selectMode(modes[idx].id, instruction || undefined);
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -325,7 +334,7 @@ export default function FullPanel() {
                   <ComparisonView
                     result={comparisonResult}
                     modes={modes}
-                    onUse={(text) => { setChosenText(text); setComparisonResult?.(null); }}
+                    onUse={(text) => { setChosenText(text); clearComparison(); }}
                   />
                 ) : showDiff && selectedText && activeText ? (
                   <DiffView original={selectedText} modified={activeText} />
@@ -555,8 +564,33 @@ function SettingsPanel({ bridge }) {
   const [settingsTab, setSettingsTab] = useState('provider');
 
   useEffect(() => {
-    const { invoke } = require('@tauri-apps/api/core');
-    invoke('get_config').then(c => setCfg(c || {})).catch(() => {});
+    // Load current config from Rust backend on mount via the shared cache.
+    // NOTE: `api_key` in the loaded config is ALWAYS masked to an empty
+    // string by the backend for security — the real value never leaves
+    // Rust. The `api_key_set` boolean tells us whether a key exists. The
+    // password input is seeded empty; if the user leaves it blank on save,
+    // the backend treats that as "keep the existing value".
+    //
+    // Seed with explicit defaults for every field the form binds to, so
+    // that an empty/partial config from the cache doesn't leave `cfg.provider`
+    // or `cfg.model` as `undefined` — which would silently overwrite a
+    // freshly-saved value on the first user interaction (the `||` fallbacks
+    // in the JSX select/input display the default but the underlying
+    // `cfg.provider` is still undefined until the user touches the control).
+    const defaults = {
+      provider: 'openrouter',
+      model: 'google/gemma-3-27b-it',
+      api_key: '',
+      base_url: '',
+      hotkey: '',
+      persona: { enabled: false, tone: 'natural', style: '', avoid: '' },
+      history: { enabled: false },
+      tutor: { enabled: false, auto_explain: false },
+      clipboard_monitor: { enabled: false },
+    };
+    loadConfigOnce()
+      .then(c => setCfg({ ...defaults, ...(c || {}) }))
+      .catch(() => setCfg(defaults));
   }, []);
 
   const update = (path, val) => {
@@ -605,7 +639,13 @@ function SettingsPanel({ bridge }) {
             <label className="settings-label">Model</label>
             <input className="input" value={cfg.model||''} onChange={e=>update('model',e.target.value)} placeholder="e.g. google/gemma-3-27b-it" />
             <label className="settings-label">API Key</label>
-            <input className="input" type="password" value={cfg.api_key||''} onChange={e=>update('api_key',e.target.value)} placeholder="sk-or-…" />
+            <input
+              className="input"
+              type="password"
+              value={cfg.api_key || ''}
+              onChange={e => update('api_key', e.target.value)}
+              placeholder={cfg.api_key_set ? '•••••••••  (leave blank to keep current key)' : 'sk-or-…'}
+            />
             {cfg.provider === 'generic' && <>
               <label className="settings-label">Base URL</label>
               <input className="input" value={cfg.base_url||''} onChange={e=>update('base_url',e.target.value)} placeholder="http://localhost:1234/v1" />
