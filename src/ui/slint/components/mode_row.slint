@@ -1,0 +1,45 @@
+import { Theme } from "../theme.slint";
+import { AppBridge, ModeInfo } from "../app_bridge.slint";
+
+// Typography-first mode buttons. We deliberately DON'T render `mode.icon`
+// (the emoji char stored on ModeInfo): colourful emoji clash with the warm
+// editorial terminal aesthetic. The monospace label + uppercase + amber
+// hover border carries identity cleanly. The struct field is kept for
+// Rust-side stability; we just ignore it here.
+export component ModeRow inherits HorizontalLayout {
+    spacing: Theme.sp-1;
+    alignment: start;
+    for mode in AppBridge.modes: Rectangle {
+        // No fixed `width:` — let the Rectangle size to its label (with a
+        // floor of 72px so buttons stay visually uniform when labels are
+        // short). Padding below adds breathing room.
+        min-width: 72px;
+        height: 32px;
+        border-radius: Theme.radius-sm;
+        border-width: Theme.border-w;
+        border-color: touch.has-hover ? Theme.accent : Theme.border;
+        background: touch.pressed ? Theme.accent : transparent;
+        animate border-color, background { duration: 120ms; }
+        HorizontalLayout {
+            padding-left: Theme.sp-3;
+            padding-right: Theme.sp-3;
+            alignment: center;
+            Text {
+                text: mode.label;
+                color: touch.pressed
+                    ? Theme.on-accent
+                    : (touch.has-hover ? Theme.text : Theme.muted);
+                font-family: Theme.font-mono;
+                font-size: Theme.fs-ui;
+                letter-spacing: 1.2px;
+                vertical-alignment: center;
+            }
+        }
+        touch := TouchArea {
+            clicked => {
+                AppBridge.active-mode = mode.id;
+                AppBridge.execute-mode(mode.id, AppBridge.active-language);
+            }
+        }
+    }
+}

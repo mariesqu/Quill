@@ -1,0 +1,112 @@
+import { Theme }     from "../theme.slint";
+import { AppBridge } from "../app_bridge.slint";
+
+component SectionHeader inherits Text {
+    color: Theme.accent;
+    font-family: Theme.font-mono;
+    font-size: Theme.fs-label;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+}
+
+component AmberButton inherits Rectangle {
+    in property <string> label;
+    in property <length> w: 96px;
+    callback clicked();
+    width: w;
+    height: 26px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover ? Theme.accent : Theme.accent-dim;
+    animate background { duration: 120ms; }
+    Text {
+        text: label;
+        color: Theme.on-accent;
+        font-family: Theme.font-mono;
+        font-size: Theme.fs-label;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component TutorTab inherits Rectangle {
+    VerticalLayout {
+        spacing: Theme.sp-3;
+
+        // Explanation pane
+        Rectangle {
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
+            border-width: Theme.border-w;
+            border-color: Theme.border;
+            min-height: 160px;
+            VerticalLayout {
+                padding: Theme.sp-3;
+                spacing: Theme.sp-2;
+                SectionHeader { text: "LAST EDIT EXPLANATION"; }
+                Text {
+                    text: AppBridge.last-tutor-explanation == ""
+                        ? "No explanation yet. Trigger one with the button below after a recent edit."
+                        : AppBridge.last-tutor-explanation;
+                    color: AppBridge.last-tutor-explanation == "" ? Theme.muted : Theme.text;
+                    font-family: Theme.font-prose;
+                    font-italic: AppBridge.last-tutor-explanation == "";
+                    font-size: Theme.fs-body;
+                    wrap: word-wrap;
+                }
+                AmberButton {
+                    label: "EXPLAIN";
+                    w: 120px;
+                    // Pass the id of the most recent history entry so the
+                    // engine can look it up and re-run the tutor explain.
+                    // The engine tolerates 0 too (falls back to
+                    // AppState.last_entry_id) so a race where the button
+                    // is clicked before Rust has seeded this property
+                    // doesn't fire against a nonexistent row.
+                    clicked => { AppBridge.request-tutor-explain(AppBridge.last-entry-id); }
+                }
+            }
+        }
+
+        // Lesson pane
+        Rectangle {
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
+            border-width: Theme.border-w;
+            border-color: Theme.border;
+            min-height: 160px;
+            VerticalLayout {
+                padding: Theme.sp-3;
+                spacing: Theme.sp-2;
+                SectionHeader { text: "LESSON"; }
+                Text {
+                    text: AppBridge.last-tutor-lesson == ""
+                        ? "Generate a daily or weekly lesson from your recent edits."
+                        : AppBridge.last-tutor-lesson;
+                    color: AppBridge.last-tutor-lesson == "" ? Theme.muted : Theme.text;
+                    font-family: Theme.font-prose;
+                    font-italic: AppBridge.last-tutor-lesson == "";
+                    font-size: Theme.fs-body;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: Theme.sp-1;
+                    AmberButton {
+                        label: "DAILY";
+                        w: 88px;
+                        clicked => { AppBridge.generate-lesson("daily"); }
+                    }
+                    AmberButton {
+                        label: "WEEKLY";
+                        w: 88px;
+                        clicked => { AppBridge.generate-lesson("weekly"); }
+                    }
+                }
+            }
+        }
+    }
+}

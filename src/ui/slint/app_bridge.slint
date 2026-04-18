@@ -1,0 +1,122 @@
+// Shared types and the AppBridge global. This file is IMPORTED by
+// main_window.slint and by every component that needs to read properties
+// or fire callbacks. AppBridge is the ONLY interface between Rust and Slint.
+
+export enum ToastKind { info, success, warning, error }
+
+export struct Toast {
+    kind: ToastKind,
+    message: string,
+    visible: bool,
+}
+
+export struct ModeInfo {
+    id: string,
+    label: string,
+    icon: string,
+}
+
+export struct ChainInfo {
+    id: string,
+    label: string,
+    icon: string,
+    description: string,
+}
+
+export struct LanguageOpt {
+    code: string,
+    label: string,
+}
+
+export struct HistoryEntry {
+    id: int,
+    timestamp: string,
+    mode: string,
+    language: string,
+    original: string,
+    output: string,
+    favorited: bool,
+}
+
+export global AppBridge {
+    // Session
+    in-out property <string> selected-text;
+    in-out property <string> stream-buffer;
+    in-out property <bool>   is-streaming;
+    in-out property <bool>   is-done;
+    in-out property <string> last-result;
+    in-out property <string> active-mode;
+    in-out property <string> active-language: "auto";
+    // Id of the most recent history row written by `finalize_result`. Used
+    // by the Tutor tab's EXPLAIN button so a click re-runs explain against
+    // the real entry (not id 0, which never exists). Defaults to 0; the
+    // engine handler treats id == 0 as "fall back to AppState.last_entry_id".
+    in-out property <int>    last-entry-id: 0;
+
+    // Collections — seeded from Rust on startup
+    in-out property <[ModeInfo]>    modes;
+    in-out property <[ChainInfo]>   chains;
+    in-out property <[LanguageOpt]> languages: [
+        { code: "auto", label: "Auto" },
+        { code: "en",   label: "EN"   },
+        { code: "fr",   label: "FR"   },
+        { code: "es",   label: "ES"   },
+        { code: "de",   label: "DE"   },
+        { code: "ja",   label: "JA"   },
+        { code: "pt",   label: "PT"   },
+        { code: "zh",   label: "ZH"   },
+    ];
+
+    // UX
+    in-out property <Toast> toast: { kind: ToastKind.info, message: "", visible: false };
+
+    // Workspace tab state (history / compare / tutor)
+    in-out property <string> current-tab: "write";
+    in-out property <[HistoryEntry]> history;
+    in-out property <string> last-tutor-explanation;
+    in-out property <string> last-tutor-lesson;
+    in-out property <string> compare-mode-a;
+    in-out property <string> compare-result-a;
+    in-out property <string> compare-mode-b;
+    in-out property <string> compare-result-b;
+
+    // Settings mirror — seeded at startup, edited in-place, flushed via save-config
+    in-out property <string> settings-provider;
+    in-out property <string> settings-api-key;
+    in-out property <string> settings-model;
+    in-out property <string> settings-hotkey;
+    in-out property <string> settings-palette-hotkey;
+
+    // Overlay pinned translate pair — seeded from Config.ui.overlay.pinned_translate.
+    // The two codes feed execute-mode("translate", code); the labels are shown
+    // in the overlay's quick-action buttons.
+    in-out property <string> pinned-translate-a-code: "en";
+    in-out property <string> pinned-translate-a-label: "EN";
+    in-out property <string> pinned-translate-b-code: "fr";
+    in-out property <string> pinned-translate-b-label: "FR";
+
+    // Callbacks — Rust registers handlers in ui/bridge.rs.
+    callback execute-mode(string /*mode*/, string /*language*/);
+    callback execute-chain(string /*chain_id*/, string /*language*/);
+    callback set-language(string /*code*/);
+    callback confirm-replace();
+    callback cancel-stream();
+    callback dismiss();
+
+    // Window chrome — window dragging via Win32 WM_NCLBUTTONDOWN trick.
+    // See ui/bridge.rs for the Rust handler.
+    callback drag-window();
+
+    // Workspace tab callbacks
+    callback switch-tab(string);
+    callback load-history();
+    callback toggle-favorite(int);
+    callback export-history(string);
+    callback run-compare(string /*mode_a*/, string /*mode_b*/);
+    callback request-tutor-explain(int);
+    callback generate-lesson(string /*daily|weekly*/);
+    callback save-settings();
+
+    // Tier 2 — open the command palette from the overlay's PALETTE button.
+    callback open-palette();
+}

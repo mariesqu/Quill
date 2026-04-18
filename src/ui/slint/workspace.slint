@@ -1,0 +1,170 @@
+// ── Tier 3 — Workspace Window ───────────────────────────────────────────────
+// A standard taskbar window (frame + resizable + NOT always-on-top) that
+// hosts the five tabs: Write, History, Tutor, Compare, Settings. This is
+// the "deep work" surface — where the user pins results, browses history,
+// tunes settings, and reviews past lessons. Unlike the ephemeral overlay
+// and the transient palette, this window behaves like a real application
+// window: it lives in the taskbar, can be minimized, resized, and closed.
+//
+// Closing the window HIDES it (close-to-tray). The tray menu's "Open
+// Workspace" item re-shows it. The app only truly quits from the tray
+// "Quit Quill" item.
+//
+// Like every Slint window in Quill, this window has its OWN per-window
+// AppBridge global instance. bridge.rs registers callbacks on it and
+// mirrors state writes into it.
+
+import { Theme }     from "./theme.slint";
+import { AppBridge } from "./app_bridge.slint";
+import { Plume }     from "./components/plume.slint";
+import { Toast }     from "./components/toast.slint";
+import { WriteTab }    from "./tabs/write.slint";
+import { HistoryTab }  from "./tabs/history.slint";
+import { TutorTab }    from "./tabs/tutor.slint";
+import { CompareTab }  from "./tabs/compare.slint";
+import { SettingsTab } from "./tabs/settings.slint";
+
+component TabButton inherits Rectangle {
+    in property <string> label;
+    in property <string> tab-id;
+    height: 36px;
+    min-width: 104px;
+    border-radius: Theme.radius-sm;
+    background: AppBridge.current-tab == tab-id ? Theme.accent : transparent;
+    border-width: Theme.border-w;
+    border-color: AppBridge.current-tab == tab-id
+        ? Theme.accent
+        : (touch.has-hover ? Theme.border-hover : Theme.border);
+    animate background, border-color { duration: 120ms; }
+    Text {
+        text: label;
+        color: AppBridge.current-tab == tab-id
+            ? Theme.on-accent
+            : (touch.has-hover ? Theme.text : Theme.muted);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-family: Theme.font-mono;
+        font-size: Theme.fs-label;
+        letter-spacing: 1.5px;
+        font-weight: AppBridge.current-tab == tab-id ? 600 : 400;
+    }
+    touch := TouchArea {
+        clicked => { AppBridge.switch-tab(tab-id); }
+    }
+}
+
+export component WorkspaceWindow inherits Window {
+    title: "Quill — Workspace";
+    icon: @image-url("../../../resources/icons/plume.svg");
+    background: Theme.bg-base;
+    default-font-family: Theme.font-mono;
+    default-font-size: Theme.fs-body;
+    // Real app window: has native chrome (title bar + taskbar), NOT always-
+    // on-top, resizable via the standard window frame handles.
+    always-on-top: false;
+    no-frame: false;
+
+    // Preferred initial size — winit honors this on first show.
+    preferred-width:  960px;
+    preferred-height: 640px;
+    min-width:  720px;
+    min-height: 480px;
+
+    // Close on Escape (hides to tray — real close is only via the tray's Quit).
+    forward-focus: workspace-focus;
+    workspace-focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                AppBridge.dismiss();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    Rectangle {
+        background: Theme.bg-base;
+
+        VerticalLayout {
+            padding: Theme.sp-5;
+            spacing: Theme.sp-4;
+
+            // ── Eyebrow + title row ──────────────────────────────────────
+            HorizontalLayout {
+                spacing: Theme.sp-3;
+                alignment: space-between;
+                HorizontalLayout {
+                    spacing: Theme.sp-2;
+                    alignment: start;
+                    Plume { width: 24px; height: 24px; }
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "QUILL — WORKSPACE";
+                            color: Theme.accent;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.fs-lead;
+                            font-weight: 600;
+                            letter-spacing: 3px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "DEEP WORK · HISTORY · TUNING";
+                            color: Theme.muted;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.fs-micro;
+                            letter-spacing: 2px;
+                        }
+                    }
+                }
+            }
+
+            // ── Tab bar ─────────────────────────────────────────────────
+            HorizontalLayout {
+                spacing: Theme.sp-1;
+                alignment: start;
+                TabButton { label: "WRITE";    tab-id: "write"; }
+                TabButton { label: "HISTORY";  tab-id: "history"; }
+                TabButton { label: "TUTOR";    tab-id: "tutor"; }
+                TabButton { label: "COMPARE";  tab-id: "compare"; }
+                TabButton { label: "SETTINGS"; tab-id: "settings"; }
+            }
+
+            // ── Tab content ─────────────────────────────────────────────
+            Rectangle {
+                vertical-stretch: 1;
+                if AppBridge.current-tab == "write":    WriteTab {}
+                if AppBridge.current-tab == "history":  HistoryTab {}
+                if AppBridge.current-tab == "tutor":    TutorTab {}
+                if AppBridge.current-tab == "compare":  CompareTab {}
+                if AppBridge.current-tab == "settings": SettingsTab {}
+            }
+
+            Toast {}
+        }
+    }
+
+    // ── Analog texture overlays ─────────────────────────────────────────
+    // Film grain + CRT scan lines on top of all content. Image elements
+    // are non-interactive in Slint — they do not block clicks.
+    Image {
+        x: 0px; y: 0px;
+        width: parent.width;
+        height: parent.height;
+        source: @image-url("../../../resources/textures/grain.svg");
+        image-fit: preserve;
+        horizontal-tiling: ImageTiling.repeat;
+        vertical-tiling: ImageTiling.repeat;
+        opacity: 0.25;
+    }
+    Image {
+        x: 0px; y: 0px;
+        width: parent.width;
+        height: parent.height;
+        source: @image-url("../../../resources/textures/scanlines.svg");
+        image-fit: preserve;
+        horizontal-tiling: ImageTiling.repeat;
+        vertical-tiling: ImageTiling.repeat;
+        opacity: 0.7;
+    }
+}

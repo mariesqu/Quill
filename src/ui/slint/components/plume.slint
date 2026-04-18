@@ -1,0 +1,10 @@
+import { Theme } from "../theme.slint";
+
+// Brand glyph — the plume. Retinted to amber to match the portfolio accent.
+// Embeds the SVG so the exe is self-contained.
+export component Plume inherits Image {
+    source: @image-url("../../../../resources/icons/plume.svg");
+    width: 20px;
+    height: 20px;
+    colorize: Theme.accent;
+}

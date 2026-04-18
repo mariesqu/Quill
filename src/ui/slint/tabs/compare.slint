@@ -1,0 +1,156 @@
+import { Theme }     from "../theme.slint";
+import { AppBridge } from "../app_bridge.slint";
+
+export component CompareTab inherits Rectangle {
+    // One-way display binding + explicit writeback on `edited` — matches
+    // the pattern used on overlay.slint's selected-text TextInput. A direct
+    // two-way `text <=> AppBridge.compare-mode-a` binding breaks after the
+    // first TextInput edit because the local writeback clobbers any future
+    // external updates (StreamDone / state rebroadcast).
+
+    VerticalLayout {
+        spacing: Theme.sp-3;
+
+        // Two mode input fields
+        HorizontalLayout {
+            spacing: Theme.sp-3;
+            Rectangle {
+                background: Theme.bg-elevated;
+                border-radius: Theme.radius-md;
+                border-width: Theme.border-w;
+                border-color: Theme.border;
+                height: 36px;
+                HorizontalLayout {
+                    padding: Theme.sp-2;
+                    spacing: Theme.sp-1;
+                    Text {
+                        text: "A";
+                        color: Theme.accent;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-label;
+                        font-weight: 600;
+                        letter-spacing: 1.5px;
+                        vertical-alignment: center;
+                    }
+                    mode-a := TextInput {
+                        text: AppBridge.compare-mode-a;
+                        color: Theme.text;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-ui;
+                        horizontal-alignment: left;
+                        vertical-alignment: center;
+                        edited => { AppBridge.compare-mode-a = self.text; }
+                    }
+                }
+            }
+            Rectangle {
+                background: Theme.bg-elevated;
+                border-radius: Theme.radius-md;
+                border-width: Theme.border-w;
+                border-color: Theme.border;
+                height: 36px;
+                HorizontalLayout {
+                    padding: Theme.sp-2;
+                    spacing: Theme.sp-1;
+                    Text {
+                        text: "B";
+                        color: Theme.accent;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-label;
+                        font-weight: 600;
+                        letter-spacing: 1.5px;
+                        vertical-alignment: center;
+                    }
+                    mode-b := TextInput {
+                        text: AppBridge.compare-mode-b;
+                        color: Theme.text;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-ui;
+                        horizontal-alignment: left;
+                        vertical-alignment: center;
+                        edited => { AppBridge.compare-mode-b = self.text; }
+                    }
+                }
+            }
+            Rectangle {
+                width: 96px;
+                height: 36px;
+                border-radius: Theme.radius-sm;
+                background: run-touch.has-hover ? Theme.accent : Theme.accent-dim;
+                animate background { duration: 120ms; }
+                Text {
+                    text: "COMPARE";
+                    color: Theme.on-accent;
+                    font-family: Theme.font-mono;
+                    font-size: Theme.fs-label;
+                    font-weight: 600;
+                    letter-spacing: 1.5px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                run-touch := TouchArea {
+                    clicked => { AppBridge.run-compare(AppBridge.compare-mode-a, AppBridge.compare-mode-b); }
+                }
+            }
+        }
+
+        // Side-by-side results
+        HorizontalLayout {
+            spacing: Theme.sp-3;
+            Rectangle {
+                background: Theme.bg-elevated;
+                border-radius: Theme.radius-md;
+                border-width: Theme.border-w;
+                border-color: Theme.border;
+                min-height: 220px;
+                VerticalLayout {
+                    padding: Theme.sp-3;
+                    spacing: Theme.sp-1;
+                    Text {
+                        text: "RESULT A";
+                        color: Theme.accent;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-label;
+                        font-weight: 600;
+                        letter-spacing: 1.5px;
+                    }
+                    Text {
+                        text: AppBridge.compare-result-a;
+                        color: Theme.text;
+                        font-family: Theme.font-prose;
+                        font-italic: true;
+                        font-size: Theme.fs-body;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+            Rectangle {
+                background: Theme.bg-elevated;
+                border-radius: Theme.radius-md;
+                border-width: Theme.border-w;
+                border-color: Theme.border;
+                min-height: 220px;
+                VerticalLayout {
+                    padding: Theme.sp-3;
+                    spacing: Theme.sp-1;
+                    Text {
+                        text: "RESULT B";
+                        color: Theme.accent;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-label;
+                        font-weight: 600;
+                        letter-spacing: 1.5px;
+                    }
+                    Text {
+                        text: AppBridge.compare-result-b;
+                        color: Theme.text;
+                        font-family: Theme.font-prose;
+                        font-italic: true;
+                        font-size: Theme.fs-body;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,109 @@
+import { Theme }     from "../theme.slint";
+import { AppBridge } from "../app_bridge.slint";
+
+component SettingField inherits Rectangle {
+    in property <string> label;
+    in-out property <string> value;
+    in property <bool> is-password;
+    height: 48px;
+    background: Theme.bg-elevated;
+    border-radius: Theme.radius-md;
+    border-width: Theme.border-w;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: Theme.sp-2;
+        spacing: 2px;
+        Text {
+            text: label;
+            color: Theme.muted;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-micro;
+            letter-spacing: 1px;
+        }
+        // Explicit display + edited pattern, consistent with overlay.slint.
+        // The previous `text <=> value` two-way binding had init-order
+        // ambiguity: a default TextInput.text could propagate upward
+        // and clobber the seeded AppBridge.settings-* values on first
+        // render. Reading one-way and writing back on `edited` avoids
+        // that round-trip.
+        TextInput {
+            text: value;
+            edited => {
+                value = self.text;
+            }
+            color: Theme.text;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-ui;
+            horizontal-alignment: left;
+            // Mask API keys and other secrets — InputType.password replaces
+            // each glyph with the platform's default masking character.
+            input-type: is-password ? InputType.password : InputType.text;
+        }
+    }
+}
+
+export component SettingsTab inherits Rectangle {
+    VerticalLayout {
+        spacing: Theme.sp-2;
+
+        SettingField {
+            label: "PROVIDER (openrouter | openai | ollama | claude-cli | generic)";
+            value <=> AppBridge.settings-provider;
+        }
+        // Hide API KEY for providers that don't authenticate via key:
+        //   - ollama: local daemon, no auth.
+        //   - claude-cli: uses the user's `claude login` session.
+        // The underlying AppBridge.settings-api-key value is untouched
+        // when the field is hidden, so a user switching back to a cloud
+        // provider doesn't lose their stored key.
+        if AppBridge.settings-provider != "ollama"
+                && AppBridge.settings-provider != "claude-cli"
+                && AppBridge.settings-provider != "claude_cli"
+                && AppBridge.settings-provider != "claude": SettingField {
+            label: "API KEY";
+            value <=> AppBridge.settings-api-key;
+            is-password: true;
+        }
+        SettingField {
+            label: "MODEL (claude-cli: haiku | sonnet | opus)";
+            value <=> AppBridge.settings-model;
+        }
+        SettingField {
+            label: "HOTKEY (e.g. Ctrl+Shift+Space)";
+            value <=> AppBridge.settings-hotkey;
+        }
+        SettingField {
+            label: "PALETTE HOTKEY (e.g. Ctrl+Shift+P)";
+            value <=> AppBridge.settings-palette-hotkey;
+        }
+
+        Rectangle {
+            width: 112px;
+            height: 30px;
+            border-radius: Theme.radius-sm;
+            background: save-touch.has-hover ? Theme.accent : Theme.accent-dim;
+            animate background { duration: 120ms; }
+            Text {
+                text: "SAVE";
+                color: Theme.on-accent;
+                font-family: Theme.font-mono;
+                font-size: Theme.fs-label;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            save-touch := TouchArea {
+                clicked => { AppBridge.save-settings(); }
+            }
+        }
+
+        Text {
+            text: "Edit ~/.quill/config/user.yaml directly for persona, custom modes, and advanced options.";
+            color: Theme.muted;
+            font-family: Theme.font-prose;
+            font-italic: true;
+            font-size: Theme.fs-ui;
+        }
+    }
+}

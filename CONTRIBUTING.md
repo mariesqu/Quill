@@ -40,9 +40,9 @@ If you plan a large change, open an issue first to discuss the approach before i
 
 | Tool | Version |
 |---|---|
-| Python | 3.11+ |
-| Node.js | 18+ |
 | Rust + Cargo | stable (via [rustup.rs](https://rustup.rs)) |
+| Node.js | 18+ |
+| Tauri system deps | see [v2.tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/) |
 
 ### Steps
 
@@ -51,47 +51,48 @@ If you plan a large change, open an issue first to discuss the approach before i
 git clone https://github.com/YOUR_USERNAME/Quill
 cd Quill
 
-# 2. Install Python dependencies (dev extras)
-pip install -e ".[dev]"
-
-# 3. Copy config and add your API key
+# 2. Copy config and add your API key
 cp config/default.yaml config/user.yaml
 # Edit config/user.yaml — set api_key
 
-# 4. Install Node dependencies
-cd ui && npm install && cd ..
-
-# 5. Run the Python core (Terminal 1)
-python -m core.main
-
-# 6. Run the Tauri dev server (Terminal 2)
-cd ui && npm run tauri dev
+# 3. Install Node dependencies and run
+cd ui
+npm install
+npm run tauri dev        # launches with hot-reload
 ```
 
-### Platform extras
+Tauri compiles the Rust backend (`ui/src-tauri/`) and serves the Vite frontend (`ui/src/`). First build downloads and compiles every crate — allow several minutes.
 
-**macOS:**
+### Platform prerequisites
+
+**Windows** — Microsoft C++ Build Tools + WebView2 (usually already installed via Edge)
+
+**macOS** — Xcode Command Line Tools (`xcode-select --install`)
+
+**Linux (Debian/Ubuntu)**
 ```bash
-pip install pyobjc-framework-AppKit
+sudo apt update
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev \
+  librsvg2-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  libxdo-dev \
+  libssl-dev \
+  patchelf xdotool xclip
 ```
 
-**Linux:**
-```bash
-sudo apt install xdotool xclip
-pip install keyboard
-```
-
-**Windows:**
-```bash
-pip install pywinauto pygetwindow keyboard
-```
-
-### Running tests
+### Quality gates
 
 ```bash
-pytest                                      # all tests
-pytest tests/test_prompt_builder.py -v     # specific file
-pytest tests/ -v --tb=short                # verbose with short tracebacks
+cd ui/src-tauri
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-features
+cargo check                    # fast type check
+
+cd ../
+npm run build                  # Vite frontend build
 ```
 
 ---
@@ -100,27 +101,29 @@ pytest tests/ -v --tb=short                # verbose with short tracebacks
 
 ```
 Quill/
-├── core/               # Python async engine
-│   ├── main.py         # entry point + command loop
-│   ├── config_loader.py
-│   ├── prompt_builder.py
-│   ├── streamer.py     # IPC emit helpers
-│   ├── history.py      # SQLite history store
-│   └── tutor.py        # AI Tutor prompt builders
-├── platform_/          # OS abstraction layer (underscore avoids stdlib clash)
-│   ├── capture/        # text selection capture
-│   ├── context/        # active app detection
-│   ├── hotkey/         # global hotkey registration
-│   └── replace/        # paste-back logic
-├── providers/          # AI provider backends (OpenAI-compatible)
 ├── config/
 │   ├── default.yaml    # shipped defaults (no secrets)
 │   ├── modes.yaml      # built-in modes + chains
 │   └── user.yaml       # gitignored — user overrides
-├── ui/
-│   ├── src/            # React components + hooks
-│   └── src-tauri/      # Tauri Rust shell
-└── tests/
+└── ui/
+    ├── src/                        # React frontend
+    │   ├── windows/
+    │   │   ├── MiniOverlay.jsx     # compact quick-access window
+    │   │   └── FullPanel.jsx       # 4-tab studio
+    │   ├── components/             # DiffView, ComparisonView, FirstRun
+    │   └── hooks/useQuillBridge.js # invoke() + listen() adapter
+    └── src-tauri/                  # Rust backend (Tauri v2)
+        ├── Cargo.toml
+        ├── tauri.conf.json
+        ├── capabilities/           # permission manifests
+        ├── icons/                  # app icons (png, ico)
+        └── src/
+            ├── main.rs             # window setup + tray + hotkey wiring
+            ├── engine.rs           # orchestrator
+            ├── commands.rs         # #[tauri::command] handlers
+            ├── core/               # config/modes/prompt/history/tutor/clipboard
+            ├── platform/           # capture/context/replace (Win32 · osascript · xdotool)
+            └── providers/          # OpenRouter · OpenAI · Ollama · Generic (SSE streaming)
 ```
 
 ---
@@ -136,13 +139,17 @@ Quill/
 
 2. Make your changes, keeping commits focused and atomic.
 
-3. Add or update tests for any logic changes in `core/` or `providers/`.
+3. Add or update tests for any logic changes in `ui/src-tauri/src/`.
 
-4. Run the full test suite: `pytest`
+4. Run the quality gates:
+   ```bash
+   cd ui/src-tauri
+   cargo fmt --all -- --check
+   cargo clippy --all-targets -- -D warnings
+   cargo test --all-features
+   ```
 
-5. Run the linter: `ruff check . && ruff format --check .`
-
-6. Push and open a PR against `main`.
+5. Push and open a PR against `main`.
 
 ---
 
@@ -158,24 +165,22 @@ Quill/
 
 ## Coding Standards
 
-### Python
+### Rust
 
-- Style enforced by **ruff** (line length 100, target Python 3.11)
-- Type hints on all public functions
-- `async/await` throughout `core/` — no blocking calls on the event loop
+- Style enforced by **`cargo fmt`** — run it before committing
+- **`cargo clippy --all-targets -- -D warnings`** must be clean
+- Use `anyhow::Result` for fallible functions that bubble up to commands
+- All `#[tauri::command]` handlers live in `commands.rs` — keep them thin; delegate to `engine.rs`
+- No blocking calls inside async command handlers — use `tokio::task::spawn_blocking` for filesystem / OS FFI work
 - No secrets or API keys in code or tests
 
 ### JavaScript / React
 
-- Functional components only
-- No external UI libraries — the glassmorphism design is custom CSS
+- Functional components + hooks only
+- No external UI libraries — the "Obsidian Glass" design is custom CSS in `globals.css`
 - Keep components focused; extract logic to hooks in `ui/src/hooks/`
 - No `console.log` left in production paths
-
-### Rust
-
-- Keep `main.rs` thin — it's a bridge, not business logic
-- All new Python message types need a matching `relay_message()` arm
+- All backend calls go through `useQuillBridge.js` (centralised `invoke()` + `listen()`)
 
 ### Commit messages
 
@@ -183,10 +188,10 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 feat: add Wayland hotkey support
-fix: relay chain_step messages through Tauri
+fix: correct chain_step event payload
 docs: update provider setup guide
 test: add prompt builder persona tests
-chore: bump httpx to 0.28
+chore: bump reqwest to 0.12
 ```
 
 ---

@@ -1,0 +1,86 @@
+[package]
+name = "quill"
+version = "1.0.0"
+description = "Privacy-first, model-agnostic AI writing assistant — native Windows"
+authors = ["Quill Contributors"]
+license = "MIT"
+repository = "https://github.com/mariesqu/Quill"
+edition = "2021"
+
+[build-dependencies]
+slint-build = "1.8"
+resvg       = "0.42"
+
+[dependencies]
+# UI
+slint            = { version = "1.8", features = ["compat-1-2", "backend-winit", "renderer-winit-skia", "raw-window-handle-06"] }
+raw-window-handle = { version = "0.6", package = "raw-window-handle" }
+
+# Platform integration
+global-hotkey    = "0.5"
+tray-icon        = "0.14"
+enigo            = "0.2"
+arboard          = "3"
+
+# Runtime + async
+tokio            = { version = "1", features = ["full"] }
+futures-util     = "0.3"
+async-trait      = "0.1"
+
+# HTTP + streaming
+reqwest          = { version = "0.12", features = ["stream", "json"] }
+
+# Persistence
+rusqlite         = { version = "0.31", features = ["bundled"] }
+
+# Config, errors, utilities
+serde            = { version = "1", features = ["derive"] }
+serde_json       = "1"
+serde_yaml       = "0.9"
+anyhow           = "1"
+dirs             = "5"
+regex            = "1"
+png              = "0.17"
+rfd              = "0.14"
+
+# Logging
+tracing             = "0.1"
+tracing-subscriber  = { version = "0.3", features = ["env-filter"] }
+tracing-appender    = "0.2"
+
+[dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Accessibility",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+    "Win32_System_SystemInformation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+]
+
+[features]
+default = []
+smoke   = []
+
+[profile.dev]
+# Mirror release's `panic = "abort"` so debug builds can't leave a poisoned
+# mutex behind either — every `.lock().unwrap()` in the codebase is audited
+# under the assumption that a panic ABORTS, not unwinds. Keeping dev on
+# unwind would let a debug-only panic poison the shared AppState and cause
+# "weird but rare" lock-poisoned crashes that don't reproduce in release.
+panic = "abort"
+
+[profile.release]
+panic         = "abort"
+codegen-units = 1
+lto           = true
+opt-level     = "s"
+strip         = true

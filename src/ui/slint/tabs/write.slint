@@ -1,0 +1,77 @@
+import { Theme }     from "../theme.slint";
+import { AppBridge } from "../app_bridge.slint";
+import { LangRow }   from "../components/lang_row.slint";
+import { ModeRow }   from "../components/mode_row.slint";
+import { ChainRow }  from "../components/chain_row.slint";
+
+export component WriteTab inherits Rectangle {
+    VerticalLayout {
+        spacing: Theme.sp-3;
+
+        // Selected text
+        Rectangle {
+            min-height: 60px;
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
+            border-width: Theme.border-w;
+            border-color: Theme.border;
+            Text {
+                text: AppBridge.selected-text == "" ? "Select text and press the hotkey to begin." : AppBridge.selected-text;
+                color: AppBridge.selected-text == "" ? Theme.muted : Theme.text;
+                font-family: Theme.font-mono;
+                font-size: Theme.fs-ui;
+                font-italic: AppBridge.selected-text == "" ? true : false;
+                wrap: word-wrap;
+                x: 10px;
+                width: parent.width - 20px;
+            }
+        }
+
+        LangRow {}
+        ModeRow {}
+        ChainRow {}
+
+        // Stream output
+        Rectangle {
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
+            border-width: Theme.border-w;
+            border-color: Theme.border;
+            min-height: 120px;
+            VerticalLayout {
+                padding: Theme.sp-3;
+                spacing: Theme.sp-2;
+                Text {
+                    text: AppBridge.stream-buffer == "" ? "Output will appear here." : AppBridge.stream-buffer;
+                    color: AppBridge.stream-buffer == "" ? Theme.muted : Theme.text;
+                    font-family: Theme.font-mono;
+                    font-size: Theme.fs-ui;
+                    wrap: word-wrap;
+                }
+                if AppBridge.is-done: HorizontalLayout {
+                    spacing: Theme.sp-1;
+                    alignment: end;
+                    Rectangle {
+                        width: 80px;
+                        height: 26px;
+                        border-radius: Theme.radius-sm;
+                        background: replace-touch.has-hover ? Theme.accent : Theme.accent-dim;
+                        Text {
+                            text: "REPLACE";
+                            color: Theme.on-accent;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.fs-label;
+                            font-weight: 600;
+                            letter-spacing: 1.5px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        replace-touch := TouchArea {
+                            clicked => { AppBridge.confirm-replace(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
