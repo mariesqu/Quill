@@ -98,7 +98,7 @@ pub fn modes_list(modes: &HashMap<String, ModeConfig>) -> Vec<ModeInfo> {
         .iter()
         .filter(|(id, _)| !ORDER.contains(&id.as_str()))
         .collect();
-    custom.sort_by(|(a, _), (b, _)| a.cmp(b));
+    custom.sort_by_key(|(a, _)| *a);
     for (id, m) in custom {
         list.push(ModeInfo {
             id: id.clone(),
@@ -114,7 +114,7 @@ pub fn chains_list(chains: &HashMap<String, ChainConfig>) -> Vec<ChainInfo> {
     // Iterating a HashMap directly gives non-deterministic order, which made
     // custom chains shuffle between process restarts.
     let mut sorted: Vec<(&String, &ChainConfig)> = chains.iter().collect();
-    sorted.sort_by(|(a, _), (b, _)| a.cmp(b));
+    sorted.sort_by_key(|(a, _)| *a);
     sorted
         .into_iter()
         .map(|(id, c)| ChainInfo {

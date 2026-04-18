@@ -1,0 +1,94 @@
+name: Release
+
+# Triggered ONLY when a `v*` tag is pushed (e.g. `v1.0.0`, `v1.0.1`).
+# Tagging a commit cuts an installable release: this workflow builds
+# `quill.exe` in release mode, packages it into a Windows MSI installer
+# via cargo-wix + WiX Toolset, and attaches the MSI to a GitHub Release
+# matching the tag.
+#
+# Trigger manually:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# The MSI lands at https://github.com/<owner>/<repo>/releases/tag/v<x>.<y>.<z>
+# as a downloadable artifact users can double-click to install.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual trigger from the Actions tab — useful for re-running a build
+  # against an existing tag without having to delete + re-push it.
+  workflow_dispatch:
+
+permissions:
+  contents: write  # required by softprops/action-gh-release to create the Release
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      # WiX Toolset 3.x is preinstalled on the windows-latest runner image,
+      # but `candle.exe` / `light.exe` aren't on PATH by default. Add them
+      # so cargo-wix can find the toolchain.
+      - name: Add WiX Toolset to PATH
+        shell: pwsh
+        run: |
+          $wix = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          if (-not (Test-Path $wix)) {
+            $wix = (Get-ChildItem "C:\Program Files (x86)" -Directory -Filter "WiX Toolset*" |
+                    Sort-Object Name -Descending | Select-Object -First 1).FullName + "\bin"
+          }
+          if (-not (Test-Path $wix)) { throw "WiX Toolset not found on runner" }
+          echo $wix | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Added to PATH: $wix"
+
+      - name: Install cargo-wix
+        # `--locked` uses the published Cargo.lock so the build is
+        # reproducible regardless of when this workflow last ran.
+        run: cargo install cargo-wix --locked
+
+      - name: Build release exe
+        run: cargo build --release
+
+      - name: Build MSI installer
+        # `--no-build` skips a redundant rebuild — we already produced
+        # `target/release/quill.exe` above. cargo-wix takes ~30s to
+        # invoke candle + light + signtool (signing skipped for this
+        # unsigned build).
+        run: cargo wix --no-build --nocapture
+
+      - name: List MSI output (diagnostic)
+        shell: pwsh
+        run: Get-ChildItem target\wix\*.msi | Format-Table Name, Length
+
+      # Attach the MSI to a GitHub Release matching the pushed tag. The
+      # action creates the release if it doesn't exist yet, or updates it
+      # if a draft is already there.
+      - name: Create GitHub Release with MSI
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/wix/*.msi
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      # For workflow_dispatch (manual reruns without a tag) just upload
+      # the MSI as a workflow artifact — no release is created.
+      - name: Upload MSI as workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quill-msi
+          path: target/wix/*.msi
+          if-no-files-found: error

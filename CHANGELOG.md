@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — Windows installer pipeline
+
+- Multi-size `quill.ico` (16/24/32/48/64/128/256 px) generated at build time from `resources/icons/plume.svg` via `resvg` + `ico` crates, then embedded into `quill.exe` via `winresource`. Explorer, taskbar, Alt-Tab, and the MSI installer chrome all show the Quill plume.
+- `wix/main.wxs` — minimal WiX 3.x installer source. Installs `quill.exe` to Program Files\Quill, creates a Start Menu shortcut, registers Add/Remove Programs entry with uninstaller. `WixUI_Minimal` one-click wizard.
+- `.github/workflows/release.yml` — on `v*` tag push, builds release exe, installs cargo-wix, runs `cargo wix --no-build` to produce `target/wix/quill-<version>-x86_64.msi`, and attaches it to a GitHub Release. Manual re-run via workflow_dispatch uploads as an artifact.
+- `npm install`/Node NOT required for the base app — only the `claude-cli` provider needs those; default providers (OpenRouter, Ollama, OpenAI, generic) install + run zero-dependency on Windows 10/11.
+
+### Fixed — clippy::unnecessary_sort_by on Rust 1.95+
+
+- `core/modes.rs` — replaced `sort_by(|(a,_),(b,_)| a.cmp(b))` with `sort_by_key(|(a,_)| *a)` in `modes_list` and `chains_list`. Surfaced by Rust 1.95's new clippy lint.
+
 ## [1.0.0] — 2026-04-17
 
 First stable release of the Slint rewrite. The Tauri + Python-sidecar

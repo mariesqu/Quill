@@ -1,0 +1,155 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  Quill Windows installer (WiX Toolset 3.x source).
+
+  Builds via `cargo wix` after `cargo build --release`. The result is
+  `target/wix/quill-<version>-x86_64.msi` — a single-file installer
+  that drops `quill.exe` into Program Files\Quill, creates a Start
+  Menu shortcut, and registers an Add/Remove Programs entry. No
+  ADMIN scripts, no PATH mutation, no system service — just a clean
+  application install.
+
+  Stable identifiers:
+    - UpgradeCode: F960E36B-C868-4FA3-9B8E-32059B212A88 (NEVER change
+      this — Windows uses it to detect previous installs and run the
+      MajorUpgrade scheduled below).
+    - Product Id: '*' generates a fresh GUID per build, which together
+      with MajorUpgrade gives the typical "uninstall the old version,
+      install the new one" upgrade flow.
+
+  The installer's branding (icon shown in Add/Remove Programs and the
+  installer chrome itself) reuses the embedded exe icon — winresource
+  embedded our multi-size quill.ico into quill.exe at build time, and
+  WiX's `<Icon SourceFile=...>` element accepts an .exe directly.
+-->
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+    <Product
+        Id='*'
+        Name='Quill'
+        UpgradeCode='F960E36B-C868-4FA3-9B8E-32059B212A88'
+        Manufacturer='Quill'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package
+            Id='*'
+            Keywords='Installer'
+            Description='Quill — privacy-first AI writing assistant'
+            Manufacturer='Quill'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252' />
+
+        <!--
+          MajorUpgrade: when the user double-clicks an MSI for a NEWER
+          version, uninstall the older one first then install the new
+          one. `afterInstallInitialize` is the recommended schedule —
+          earliest point at which a clean upgrade is safe.
+        -->
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of Quill is already installed. Uninstall it first if you want to install this older build.' />
+
+        <!-- Single embedded .cab — no separate file payload. -->
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='Quill v$(var.Version) Installer' />
+        <Property Id='DiskPrompt' Value='Quill v$(var.Version) Installer' />
+
+        <!-- ── Filesystem layout ──────────────────────────────────── -->
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='ProgramFiles64Folder' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='Quill'>
+                    <!--
+                      The single payload component: quill.exe.
+                      KeyPath='yes' tells the installer that this file
+                      is the component's identity for repair / upgrade
+                      decisions.
+                    -->
+                    <Component Id='QuillExe' Guid='*' Win64='yes'>
+                        <File
+                            Id='QuillExeFile'
+                            Name='quill.exe'
+                            DiskId='1'
+                            Source='target\release\quill.exe'
+                            KeyPath='yes' />
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <!-- ── Start Menu shortcut ────────────────────────────── -->
+            <Directory Id='ProgramMenuFolder'>
+                <Directory Id='QuillProgramMenuDir' Name='Quill'>
+                    <Component Id='QuillStartMenuShortcut' Guid='*'>
+                        <Shortcut
+                            Id='QuillStartShortcut'
+                            Name='Quill'
+                            Description='Privacy-first AI writing assistant'
+                            Target='[#QuillExeFile]'
+                            WorkingDirectory='APPLICATIONFOLDER'
+                            Icon='QuillExeIcon'
+                            IconIndex='0' />
+                        <!--
+                          MSI requires every shortcut component to have
+                          a non-file KeyPath; the documented idiom is a
+                          throwaway HKCU registry value scoped to the
+                          install. RemoveFolder cleans up the empty
+                          Start Menu group on uninstall.
+                        -->
+                        <RegistryValue
+                            Root='HKCU'
+                            Key='Software\Quill'
+                            Name='installed'
+                            Type='integer'
+                            Value='1'
+                            KeyPath='yes' />
+                        <RemoveFolder
+                            Id='RemoveQuillProgramMenuDir'
+                            Directory='QuillProgramMenuDir'
+                            On='uninstall' />
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <!-- ── Feature aggregation ──────────────────────────────────
+             Single feature ('Complete') containing both components. The
+             user doesn't see an MSI feature picker; this just lumps
+             them under one install. -->
+        <Feature
+            Id='Complete'
+            Title='Quill'
+            Description='Quill — AI writing assistant for Windows.'
+            Display='expand'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'>
+            <ComponentRef Id='QuillExe' />
+            <ComponentRef Id='QuillStartMenuShortcut' />
+        </Feature>
+
+        <!-- ── Add/Remove Programs branding ─────────────────────────
+             ARPPRODUCTICON points at the icon ID below; the icon
+             SourceFile is the just-built quill.exe (whose embedded
+             multi-size .ico the installer extracts at build time). -->
+        <Icon Id='QuillExeIcon' SourceFile='target\release\quill.exe' />
+        <Property Id='ARPPRODUCTICON' Value='QuillExeIcon' />
+        <Property Id='ARPHELPLINK' Value='https://github.com/mariesqu/Quill' />
+        <Property Id='ARPURLINFOABOUT' Value='https://github.com/mariesqu/Quill' />
+
+        <!-- ── Default install dir override ─────────────────────────
+             Without WIXUI_INSTALLDIR + a UI, MSI uses the directory
+             tree's default. We use the standard Programs Files folder
+             via APPLICATIONFOLDER above, so this just sets the
+             advertised default path for repair scenarios. -->
+        <Property Id='WIXUI_INSTALLDIR' Value='APPLICATIONFOLDER' />
+
+        <!-- ── UI: minimal, license-free silent-friendly ───────────
+             WixUI_Minimal shows a single-page click-through wizard
+             (no license page, no feature picker). End users see one
+             dialog with an Install button. /quiet mode also works
+             for silent installs. -->
+        <UIRef Id='WixUI_Minimal' />
+    </Product>
+</Wix>

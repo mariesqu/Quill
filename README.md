@@ -49,7 +49,11 @@ Works with any AI model — cloud or fully local. Single native `.exe`, warm-edi
 - **Windows 10 or 11** — UIA, WinEvent hooks, and DWM drop shadow all work on both
 - **Rust stable** (via [rustup](https://rustup.rs)) if building from source
 
-### Build from source
+### Install via MSI (end users)
+
+Download the `quill-<version>-x86_64.msi` from the [latest Release](https://github.com/mariesqu/Quill/releases/latest) and double-click it. The installer drops `quill.exe` into `Program Files\Quill`, creates a Start Menu shortcut, and registers an Add/Remove Programs entry. Launch from the Start Menu. No additional dependencies to install for the default providers (OpenRouter / Ollama / OpenAI / generic).
+
+### Build from source (developers)
 
 ```bash
 git clone https://github.com/mariesqu/Quill
@@ -60,6 +64,16 @@ cargo build --release
 ```
 
 The first build compiles every crate (Slint, tokio, reqwest, windows-rs, rusqlite) — allow 3–5 minutes. Subsequent builds are incremental and take seconds.
+
+To build the MSI installer locally (requires [WiX Toolset 3.x](https://github.com/wixtoolset/wix3/releases) + `cargo install cargo-wix`):
+
+```bash
+cargo build --release
+cargo wix --no-build
+# MSI lands at target/wix/quill-<version>-x86_64.msi
+```
+
+Releases are cut by pushing a `v*` tag; the `release.yml` workflow builds the MSI on `windows-latest` and attaches it to a GitHub Release automatically.
 
 ### Configure
 
@@ -709,20 +723,6 @@ Zero IPC, zero serialization — Slint and Rust share the same address space.
 - **Build**: `resvg` 0.42 (build.rs rasterises `resources/icons/plume.svg` into a 32×32 `quill-tray-32.png` inside `OUT_DIR` — consumed by `src/platform/tray.rs` via `include_bytes!`)
 - **Logging**: `tracing` + `tracing-subscriber` + `tracing-appender` (synchronous file writes to `~/.quill/quill.log.YYYY-MM-DD` via the `daily` rolling appender — no async buffering, every line flushed immediately)
 - **Reasoning-model support**: streaming `ThinkFilter` strips `<think>…</think>` blocks from chain-of-thought models (MiniMax, DeepSeek-R1, Qwen3, …) before tokens reach the UI or history
-
-### History
-
-Quill started on Tauri v2 + React 18 with a WebView-hosted overlay (preserved at the `tauri-final` tag in git). The `claude/slint-rewrite` branch replaced the entire frontend + IPC stack with native Slint across six plans, then a seven-phase "warm editorial" visual + architecture refresh on top:
-
-| Phase | What |
-|---|---|
-| Plans 1–6 | Foundation, Engine refactor, Slint MVP, tabs, floating pencil, polish + ship |
-| Rewrite 1–4 | Design tokens (`theme.slint`), vendored fonts, three-tier windows (Overlay / Palette / Workspace), retinting |
-| Rewrite 5 | WorkspaceWindow built, `MainWindow` deleted, bridge moved to `(workspace, overlay)` |
-| Rewrite 6 | Tray rewrite + engine glue — `ViewMode`/`ToggleView` stripped, configurable pinned-translate pair |
-| Rewrite 7 | Polish + animations — near-caret positioning, auto-focus, fade-in, radial glow, palette hotkey, trace cleanup |
-
-Subsequent code-review rounds landed critical-bug fixes (palette click dispatch, UIA caret naming, history init_db wiring, shutdown drop order, SAFEARRAY RAII, API-key masking, privacy-respectful logs, HTTP connect timeout, config write serialization, O(N²) stream chunk collapse, palette bring-to-front).
 
 ---
 
