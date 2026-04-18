@@ -710,20 +710,6 @@ Zero IPC, zero serialization — Slint and Rust share the same address space.
 - **Logging**: `tracing` + `tracing-subscriber` + `tracing-appender` (synchronous file writes to `~/.quill/quill.log.YYYY-MM-DD` via the `daily` rolling appender — no async buffering, every line flushed immediately)
 - **Reasoning-model support**: streaming `ThinkFilter` strips `<think>…</think>` blocks from chain-of-thought models (MiniMax, DeepSeek-R1, Qwen3, …) before tokens reach the UI or history
 
-### History
-
-Quill started on Tauri v2 + React 18 with a WebView-hosted overlay (preserved at the `tauri-final` tag in git). The `claude/slint-rewrite` branch replaced the entire frontend + IPC stack with native Slint across six plans, then a seven-phase "warm editorial" visual + architecture refresh on top:
-
-| Phase | What |
-|---|---|
-| Plans 1–6 | Foundation, Engine refactor, Slint MVP, tabs, floating pencil, polish + ship |
-| Rewrite 1–4 | Design tokens (`theme.slint`), vendored fonts, three-tier windows (Overlay / Palette / Workspace), retinting |
-| Rewrite 5 | WorkspaceWindow built, `MainWindow` deleted, bridge moved to `(workspace, overlay)` |
-| Rewrite 6 | Tray rewrite + engine glue — `ViewMode`/`ToggleView` stripped, configurable pinned-translate pair |
-| Rewrite 7 | Polish + animations — near-caret positioning, auto-focus, fade-in, radial glow, palette hotkey, trace cleanup |
-
-Subsequent code-review rounds landed critical-bug fixes (palette click dispatch, UIA caret naming, history init_db wiring, shutdown drop order, SAFEARRAY RAII, API-key masking, privacy-respectful logs, HTTP connect timeout, config write serialization, O(N²) stream chunk collapse, palette bring-to-front).
-
 ---
 
 ## License
