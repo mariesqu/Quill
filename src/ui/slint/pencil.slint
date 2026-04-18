@@ -1,0 +1,34 @@
+import { Theme } from "./theme.slint";
+import { Plume } from "./components/plume.slint";
+
+export component PencilWindow inherits Window {
+    title: "Quill Pencil";
+    icon: @image-url("../../../resources/icons/plume.svg");
+    background: transparent;
+    no-frame: true;
+    always-on-top: true;
+    width: 32px;
+    height: 32px;
+
+    in-out property <bool> is-visible: false;
+
+    callback clicked();
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        opacity: root.is-visible ? 1.0 : 0.0;
+        animate opacity {
+            duration: root.is-visible ? 80ms : 120ms;
+            easing: ease-out;
+        }
+        // Amber halo on hover — matches the overlay radial glow.
+        background: touch.has-hover ? rgba(232, 168, 69, 0.22) : transparent;
+        border-radius: Theme.radius-md;
+        animate background { duration: 120ms; }
+        Plume { width: 24px; height: 24px; }
+        touch := TouchArea {
+            clicked => { root.clicked(); }
+        }
+    }
+}

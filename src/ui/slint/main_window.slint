@@ -1,0 +1,24 @@
+// ── Slint compilation root ──────────────────────────────────────────────────
+// This file is the compile entry for `slint_build::compile_with_config`
+// (see build.rs) — NOT a window. In the three-tier model every surface
+// has its own window file: overlay.slint (Tier 1), palette.slint (Tier 2),
+// workspace.slint (Tier 3). This file exists solely to import every type,
+// global, and component the Rust side needs, and re-export them so
+// `slint::include_modules!()` surfaces them.
+//
+// Keep the imports exhaustive: anything referenced by Rust via
+// `crate::ui::Foo` MUST be transitively reachable from here.
+
+// Theme MUST be imported first so the vendored fonts at the top of
+// theme.slint are registered with the renderer before any component
+// references them.
+import { Theme } from "./theme.slint";
+import { AppBridge, ModeInfo, ChainInfo, LanguageOpt, Toast, ToastKind } from "./app_bridge.slint";
+import { PencilWindow } from "./pencil.slint";
+import { OverlayWindow } from "./overlay.slint";
+import { PaletteWindow, PaletteBridge, PaletteItem } from "./palette.slint";
+import { WorkspaceWindow } from "./workspace.slint";
+
+// Re-export every type / global / component used from Rust.
+export { Theme, AppBridge, ModeInfo, ChainInfo, LanguageOpt, Toast, ToastKind }
+export { PencilWindow, OverlayWindow, PaletteWindow, PaletteBridge, PaletteItem, WorkspaceWindow }

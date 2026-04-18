@@ -1,0 +1,263 @@
+// ── Tier 2 — Command Palette ────────────────────────────────────────────────
+// Fuzzy-searchable command launcher. Contains modes, chains, and system
+// commands ("Open Workspace", "Open Settings"). Launched from:
+//   - Tray → "Command Palette"
+//   - PALETTE button in the overlay (click-only; no keyboard binding)
+//   - Dedicated hotkey Ctrl+Shift+P (customisable via hotkey_palette)
+//
+// The palette reads AppBridge for the current selected-text context
+// (shown in the footer) and dispatches execute-mode / execute-chain via
+// the same AppBridge callbacks the overlay uses. Navigation: ↑↓ to move,
+// Enter to run, Esc to close.
+import { Theme } from "./theme.slint";
+import { AppBridge } from "./app_bridge.slint";
+
+// ── Item model ──────────────────────────────────────────────────────────────
+// `hint` used to live here for a keyboard-shortcut column on the right of
+// each row, but every catalog entry set it to an empty string and the Text
+// element was always invisible. Dropped to keep the struct honest.
+export struct PaletteItem {
+    id: string,
+    label: string,
+    section: string,
+    icon: string,
+}
+
+// ── Palette globals ─────────────────────────────────────────────────────────
+export global PaletteBridge {
+    in-out property <string> search-text;
+    in-out property <[PaletteItem]> items;
+    in-out property <[PaletteItem]> filtered-items;
+    in-out property <int> selected-index: 0;
+
+    callback item-activated(string /* id */);
+    callback search-changed(string /* query */);
+    callback dismiss();
+}
+
+// ── Row component ───────────────────────────────────────────────────────────
+// Typography-only row — the `icon` field on PaletteItem is intentionally
+// NOT rendered. Emoji glyphs (✂️ 👔 ✨ …) clash with the warm editorial
+// aesthetic; we rely on a left-edge amber marker for selection state and
+// monospace label weight for identity. The `icon` struct field is kept
+// for Rust-side stability.
+component PaletteRow inherits Rectangle {
+    in property <string> id;
+    in property <string> label;
+    in property <bool> selected;
+
+    height: 32px;
+    border-radius: Theme.radius-sm;
+    background: root.selected ? Theme.bg-elevated : transparent;
+
+    // Left-edge amber marker: a 2px accent bar that fades in on selection.
+    // Terminal-flavoured, no cheap icon bitmap needed.
+    Rectangle {
+        x: 0;
+        y: (parent.height - 16px) / 2;
+        width: 2px;
+        height: 16px;
+        background: root.selected ? Theme.accent : transparent;
+        animate background { duration: 120ms; }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.sp-4;
+        padding-right: Theme.sp-3;
+        alignment: start;
+        Text {
+            text: root.label;
+            color: root.selected ? Theme.text : Theme.muted;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-ui;
+            letter-spacing: 0.8px;
+            vertical-alignment: center;
+        }
+    }
+    TouchArea {
+        // Dispatch the catalog ID ("mode:rewrite" / "chain:foo" /
+        // "cmd:workspace" …) — NOT the user-visible label. The Rust
+        // handler in `palette_window::build` matches on id prefix.
+        clicked => { PaletteBridge.item-activated(root.id); }
+    }
+}
+
+// ── Window ──────────────────────────────────────────────────────────────────
+export component PaletteWindow inherits Window {
+    title: "Quill Palette";
+    icon: @image-url("../../../resources/icons/plume.svg");
+    background: #0a0a0a;
+    no-frame: true;
+    always-on-top: true;
+    default-font-family: Theme.font-mono;
+    default-font-size: Theme.fs-body;
+
+    width: 560px;
+    height: 460px;
+
+    forward-focus: search-scope;
+
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: #0a0a0a;
+        border-width: Theme.border-w;
+        border-color: Theme.border;
+        border-radius: Theme.radius-md;
+
+        VerticalLayout {
+            padding: Theme.sp-4;
+            spacing: Theme.sp-2;
+
+            // ── Search input ────────────────────────────────────────────
+            Rectangle {
+                height: 40px;
+                background: Theme.bg-surface;
+                border-radius: Theme.radius-sm;
+                border-width: Theme.border-w;
+                border-color: search-input.has-focus ? Theme.accent : Theme.border;
+                animate border-color { duration: 120ms; }
+
+                HorizontalLayout {
+                    padding-left: Theme.sp-3;
+                    padding-right: Theme.sp-3;
+                    spacing: Theme.sp-2;
+                    alignment: start;
+                    // Terminal-style prompt marker instead of an emoji.
+                    // JetBrains Mono renders it as a clean amber chevron.
+                    Text {
+                        text: "»";
+                        color: search-input.has-focus ? Theme.accent : Theme.muted;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-hero;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    search-scope := FocusScope {
+                        key-pressed(event) => {
+                            if (event.text == Key.Escape) {
+                                PaletteBridge.dismiss();
+                                return accept;
+                            }
+                            if (event.text == Key.Return) {
+                                // Activate the currently selected item.
+                                // Guard against the filtered-items list
+                                // having shrunk below selected-index (e.g.
+                                // user typed a query that filters everything
+                                // but the stale selected-index still points
+                                // at a now-gone row).
+                                if (PaletteBridge.filtered-items.length > 0
+                                    && PaletteBridge.selected-index >= 0
+                                    && PaletteBridge.selected-index < PaletteBridge.filtered-items.length) {
+                                    PaletteBridge.item-activated(
+                                        PaletteBridge.filtered-items[PaletteBridge.selected-index].id
+                                    );
+                                }
+                                return accept;
+                            }
+                            if (event.text == Key.UpArrow) {
+                                if (PaletteBridge.selected-index > 0) {
+                                    PaletteBridge.selected-index -= 1;
+                                }
+                                return accept;
+                            }
+                            if (event.text == Key.DownArrow) {
+                                if (PaletteBridge.selected-index < PaletteBridge.filtered-items.length - 1) {
+                                    PaletteBridge.selected-index += 1;
+                                }
+                                return accept;
+                            }
+                            return reject;
+                        }
+
+                        search-input := TextInput {
+                            text: PaletteBridge.search-text;
+                            edited => {
+                                PaletteBridge.search-text = self.text;
+                                PaletteBridge.search-changed(self.text);
+                                // Reset selected-index to 0 on edit (UX
+                                // convention — typing repicks from the
+                                // top). The Return handler above then
+                                // guards against an empty filtered-items
+                                // list so a 0-index into an empty list
+                                // can't activate garbage.
+                                PaletteBridge.selected-index = 0;
+                            }
+                            color: Theme.text;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.fs-body;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                    Text {
+                        text: "ESC";
+                        color: Theme.dim;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-micro;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                }
+                // Placeholder
+                Text {
+                    visible: PaletteBridge.search-text == "";
+                    text: "type to filter…";
+                    color: Theme.dim;
+                    font-family: Theme.font-mono;
+                    font-size: Theme.fs-body;
+                    font-italic: true;
+                    x: 40px;
+                    vertical-alignment: center;
+                    height: parent.height;
+                }
+            }
+
+            // ── Results list ────────────────────────────────────────────
+            Flickable {
+                vertical-stretch: 1;
+                viewport-height: results-col.preferred-height;
+                results-col := VerticalLayout {
+                    spacing: 2px;
+                    for item[idx] in PaletteBridge.filtered-items: PaletteRow {
+                        id: item.id;
+                        label: item.label;
+                        selected: idx == PaletteBridge.selected-index;
+                    }
+                }
+            }
+
+            // ── Footer: context preview ─────────────────────────────────
+            Rectangle {
+                height: 28px;
+                background: Theme.bg-surface;
+                border-radius: Theme.radius-sm;
+                HorizontalLayout {
+                    padding-left: Theme.sp-3;
+                    padding-right: Theme.sp-3;
+                    spacing: Theme.sp-2;
+                    alignment: start;
+                    Text {
+                        text: "Context:";
+                        color: Theme.dim;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-micro;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: AppBridge.selected-text == ""
+                            ? "no text (type in overlay first)"
+                            : AppBridge.selected-text;
+                        color: Theme.muted;
+                        font-family: Theme.font-prose;
+                        font-size: Theme.fs-label;
+                        font-italic: true;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}

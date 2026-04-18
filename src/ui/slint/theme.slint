@@ -1,0 +1,88 @@
+// Quill design system — warm editorial, direct translation of
+// C:\GitLab\mario-esquivel\portfolio.html :root tokens. Every color, size,
+// and font lives here. Components MUST read from `Theme.*` — never hard-code
+// hex values in .slint files. When we want to retint the whole app, we
+// change this file and nothing else.
+//
+// Mica is intentionally NOT used: the portfolio aesthetic is a solid warm
+// black (#0d0d0d) with amber accents. Mica is Windows 11's translucent
+// material which pulls wallpaper color through the window — it fights the
+// whole palette and cannot coexist with this design.
+
+// ── Vendored fonts ──────────────────────────────────────────────────────────
+// Slint's compiler picks up `import "X.ttf";` statements, embeds the file
+// in the binary, and registers it with the renderer at startup — same effect
+// as a runtime `register_font_from_memory` call but decided at compile time.
+// Paths are resolved relative to this file. Reach the project root three
+// levels up (src/ui/slint/ → project root → resources/fonts).
+import "../../../resources/fonts/JetBrainsMono-Regular.ttf";
+import "../../../resources/fonts/JetBrainsMono-Bold.ttf";
+import "../../../resources/fonts/DMSerifDisplay-Italic.ttf";
+import "../../../resources/fonts/Lora-Italic.ttf";
+
+export global Theme {
+    // ── Palette ──────────────────────────────────────────────────────────
+    // Warm blacks: near-soot → card surface → hover lift.
+    out property <color> bg-base:      #0d0d0d;
+    out property <color> bg-surface:   #141414;
+    out property <color> bg-elevated:  #1a1a1a;
+
+    // Hairline borders — barely visible on the warm black, as intended.
+    out property <color> border:       #222222;
+    out property <color> border-hover: #3a3a3a;
+
+    // Cream text (NOT pure white — gives the parchment / letter feel).
+    out property <color> text:         #e8e0d0;
+    out property <color> muted:        #6b6560;
+    out property <color> dim:          #3f3d38;
+
+    // Amber gold — the ONE primary accent. Used sparingly: primary buttons,
+    // focused input borders, plume icon, section header dashes.
+    out property <color> accent:       #e8a845;
+    out property <color> accent-dim:   #8a6428;
+
+    // Terracotta — secondary / rarely used accent. Reserved for "prose"
+    // contexts (italic result text, book-like indicators).
+    out property <color> accent-soft:  #c4785a;
+
+    // Primary button text color — sits on top of the amber fill.
+    out property <color> on-accent:    #0d0d0d;
+
+    // Semantic status colors (kept warm, not neon).
+    out property <color> error:        #c4785a;
+    out property <color> success:      #a8d8a0;
+    out property <color> warning:      #e8a845;
+    out property <color> info:         #9ecbff;
+
+    // ── Typography ───────────────────────────────────────────────────────
+    // Fonts are registered by Slint at compile time via the `import "X.ttf";`
+    // statements above. No Rust-side registration needed. The exact family
+    // names below must match the TTF's internal name records.
+    out property <string> font-mono:    "JetBrains Mono";
+    out property <string> font-display: "DM Serif Display";
+    out property <string> font-prose:   "Lora";
+
+    out property <length> fs-micro:  9px;   // keybind hints, eyebrow labels
+    out property <length> fs-label:  11px;  // tab labels, section headers
+    out property <length> fs-ui:     12px;  // buttons, inputs
+    out property <length> fs-body:   13px;  // primary reading size
+    out property <length> fs-lead:   14px;  // window titles
+    out property <length> fs-hero:   18px;  // display accents
+
+    // ── Shape ────────────────────────────────────────────────────────────
+    // Nearly square — the portfolio is a sharp object, not a rounded card.
+    out property <length> radius-sm: 2px;
+    out property <length> radius-md: 4px;
+    out property <length> radius-lg: 6px;   // only used for the plume bubble
+
+    out property <length> border-w:  1px;
+
+    // ── Spacing ──────────────────────────────────────────────────────────
+    out property <length> sp-0: 4px;
+    out property <length> sp-1: 6px;
+    out property <length> sp-2: 8px;
+    out property <length> sp-3: 12px;
+    out property <length> sp-4: 16px;
+    out property <length> sp-5: 24px;
+    out property <length> sp-6: 32px;
+}

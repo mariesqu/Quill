@@ -1,0 +1,36 @@
+import { Theme } from "../theme.slint";
+import { AppBridge, ChainInfo } from "../app_bridge.slint";
+
+// Chains read as plain monospace labels ("Fix → Formal"). The emoji icon
+// on ChainInfo is deliberately unrendered — it clashes with the warm
+// editorial aesthetic. The label itself carries the arrow glyph that
+// makes chains recognisable as composed operations.
+export component ChainRow inherits HorizontalLayout {
+    spacing: Theme.sp-1;
+    alignment: start;
+    for chain in AppBridge.chains: Rectangle {
+        height: 28px;
+        min-width: 96px;
+        border-radius: Theme.radius-sm;
+        border-width: Theme.border-w;
+        border-color: touch.has-hover ? Theme.text : Theme.border;
+        background: transparent;
+        animate border-color { duration: 120ms; }
+        HorizontalLayout {
+            padding-left: Theme.sp-3;
+            padding-right: Theme.sp-3;
+            alignment: center;
+            Text {
+                text: chain.label;
+                color: touch.has-hover ? Theme.text : Theme.muted;
+                font-family: Theme.font-mono;
+                font-size: Theme.fs-ui;
+                letter-spacing: 1.0px;
+                vertical-alignment: center;
+            }
+        }
+        touch := TouchArea {
+            clicked => { AppBridge.execute-chain(chain.id, AppBridge.active-language); }
+        }
+    }
+}

@@ -1,0 +1,369 @@
+// ── Tier 1 — Ephemeral Overlay ──────────────────────────────────────────────
+// Hotkey-summoned floating panel, positioned near the caret. Two primary
+// actions (Rewrite, Translate→A, Translate→B — codes from Config), a free-
+// text input that accepts either the captured selection or directly typed
+// text, and a streaming result area that fades in when a mode runs.
+//
+// The overlay shares the AppBridge contract with the workspace + palette —
+// there is intentionally NO separate overlay global, so state flows through
+// `apply_to_all` in bridge.rs.
+import { Theme } from "./theme.slint";
+import { AppBridge } from "./app_bridge.slint";
+import { Toast } from "./components/toast.slint";
+
+component GhostButton inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    callback clicked <=> touch.clicked;
+    height: 32px;
+    min-width: 88px;
+    border-radius: Theme.radius-sm;
+    border-width: Theme.border-w;
+    border-color: touch.has-hover ? Theme.text : Theme.border;
+    background: transparent;
+    animate border-color { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        spacing: Theme.sp-1;
+        alignment: center;
+        Text {
+            text: root.label;
+            color: touch.has-hover ? Theme.text : Theme.muted;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-ui;
+            letter-spacing: 1.2px;
+            vertical-alignment: center;
+        }
+        Text {
+            visible: root.hint != "";
+            text: root.hint;
+            color: Theme.dim;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-micro;
+            letter-spacing: 0.5px;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {}
+}
+
+component PrimaryButton inherits Rectangle {
+    in property <string> label;
+    callback clicked <=> touch.clicked;
+    height: 32px;
+    min-width: 104px;
+    border-radius: Theme.radius-sm;
+    border-width: Theme.border-w;
+    border-color: Theme.accent;
+    background: touch.has-hover ? #f0b85a : Theme.accent;
+    animate background { duration: 120ms; }
+    Text {
+        text: root.label;
+        color: Theme.on-accent;
+        font-family: Theme.font-mono;
+        font-size: Theme.fs-ui;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {}
+}
+
+export component OverlayWindow inherits Window {
+    title: "Quill Overlay";
+    // Window icon — the Quill plume. Embedded at compile time via Slint's
+    // `@image-url` (path relative to this .slint). Routes through winit's
+    // `set_window_icon`, which Windows picks up for the taskbar entry.
+    icon: @image-url("../../../resources/icons/plume.svg");
+    background: Theme.bg-base;
+    no-frame: true;
+    always-on-top: true;
+    default-font-family: Theme.font-mono;
+    default-font-size: Theme.fs-body;
+
+    // Grows when a result streams in. The morph is driven by
+    // `is-streaming || is-done` via the `animate height` below.
+    width: 460px;
+    height: AppBridge.is-streaming || AppBridge.is-done ? 380px : 200px;
+    animate height { duration: 220ms; easing: ease-in-out; }
+
+    // Invoked from Rust (overlay_window::focus_text_input) right after
+    // the first show() so the user can type immediately without clicking.
+    callback focus-text-input();
+    focus-text-input => {
+        text-input.focus();
+    }
+
+    // Close on Escape — the FocusScope stays in the event chain and
+    // catches keys the TextInput doesn't consume. `forward-focus`
+    // delegates actual input focus down to the TextInput.
+    forward-focus: overlay-focus;
+    overlay-focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                AppBridge.dismiss();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    // Outer panel — hairline border + subtle inner padding.
+    Rectangle {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: Theme.bg-base;
+        border-width: Theme.border-w;
+        border-color: Theme.border;
+        border-radius: Theme.radius-md;
+
+        // Subtle amber radial glow tracking the primary button row. Sits
+        // BEHIND the content (first child of the outer Rectangle). In Slint
+        // a child's `y` is already in its direct parent's coordinate frame
+        // WITH layout padding folded in — `action-row.y` is the action-row's
+        // actual offset within the VerticalLayout. Since the VerticalLayout
+        // itself sits at (0, 0) inside the outer Rectangle, action-row.y is
+        // already correct in this Rectangle's coordinate space; adding the
+        // VerticalLayout's padding on top would double-count it.
+        Rectangle {
+            x: 0;
+            y: action-row.y - 10px;
+            width: parent.width;
+            height: 80px;
+            background: @radial-gradient(circle, rgba(232,168,69,0.10) 0%, transparent 70%);
+        }
+
+        VerticalLayout {
+            padding: Theme.sp-4;
+            spacing: Theme.sp-3;
+
+            // ── Header ─────────────────────────────────────────────────
+            HorizontalLayout {
+                height: 24px;
+                spacing: Theme.sp-2;
+                alignment: space-between;
+                // Drag handle (title area)
+                Rectangle {
+                    horizontal-stretch: 1;
+                    drag-touch := TouchArea {
+                        pointer-event(ev) => {
+                            if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left) {
+                                AppBridge.drag-window();
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: Theme.sp-2;
+                        alignment: start;
+                        // "Eyebrow" dash — portfolio .hero-eyebrow pattern.
+                        Rectangle {
+                            width: 20px;
+                            height: 1px;
+                            background: Theme.accent;
+                            y: parent.height / 2;
+                        }
+                        Text {
+                            text: "QUILL";
+                            color: Theme.accent;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.fs-micro;
+                            font-weight: 600;
+                            letter-spacing: 3px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                Rectangle {
+                    width: 22px;
+                    height: 22px;
+                    border-radius: Theme.radius-sm;
+                    background: close-touch.has-hover ? Theme.accent-soft : transparent;
+                    Text {
+                        text: "✕";
+                        color: Theme.text;
+                        font-family: "Segoe UI Symbol";
+                        font-size: Theme.fs-ui;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    close-touch := TouchArea {
+                        clicked => { AppBridge.dismiss(); }
+                    }
+                }
+            }
+
+            // ── Input box (free-text + captured selection, editable) ───
+            Rectangle {
+                height: 52px;
+                background: Theme.bg-surface;
+                border-radius: Theme.radius-sm;
+                border-width: Theme.border-w;
+                border-color: text-input.has-focus ? Theme.accent : Theme.border;
+                animate border-color { duration: 120ms; }
+
+                text-input := TextInput {
+                    x: Theme.sp-3;
+                    y: Theme.sp-2;
+                    width: parent.width - 2 * Theme.sp-3;
+                    height: parent.height - 2 * Theme.sp-2;
+                    // One-way display binding + explicit write-back on edit.
+                    // The previous `<=>` two-way binding had an init-order
+                    // bug: during the first `show()` of the overlay window,
+                    // Slint would propagate the TextInput's default-empty
+                    // text through the binding and clobber whatever we had
+                    // written to `selected-text` moments earlier. A one-way
+                    // binding can't be clobbered because there is no back
+                    // pressure from the TextInput's default value.
+                    text: AppBridge.selected-text;
+                    edited => {
+                        AppBridge.selected-text = self.text;
+                    }
+                    color: Theme.text;
+                    font-family: Theme.font-prose;
+                    font-size: Theme.fs-body;
+                    font-italic: true;
+                    wrap: word-wrap;
+                    single-line: false;
+                    selection-background-color: Theme.accent;
+                    selection-foreground-color: Theme.on-accent;
+                }
+                // Placeholder — shown only when the field is empty.
+                Text {
+                    visible: AppBridge.selected-text == "";
+                    text: "Type or select text…";
+                    color: Theme.dim;
+                    font-family: Theme.font-prose;
+                    font-size: Theme.fs-body;
+                    font-italic: true;
+                    x: Theme.sp-3;
+                    y: Theme.sp-2;
+                }
+            }
+
+            // ── Action row ─────────────────────────────────────────────
+            action-row := HorizontalLayout {
+                spacing: Theme.sp-2;
+                alignment: start;
+                PrimaryButton {
+                    label: "REWRITE";
+                    clicked => {
+                        AppBridge.active-mode = "rewrite";
+                        AppBridge.execute-mode("rewrite", AppBridge.active-language);
+                    }
+                }
+                // Pinned translate pills — the "→ XX" form reads as
+                // "translate to XX" next to the REWRITE primary, without
+                // eating horizontal room the way "TRANSLATE → XX" did
+                // (three long pills plus PALETTE over-ran the 460px
+                // overlay width, causing visual text collision).
+                GhostButton {
+                    label: "→ " + AppBridge.pinned-translate-a-label;
+                    clicked => {
+                        AppBridge.active-mode = "translate";
+                        AppBridge.execute-mode("translate", AppBridge.pinned-translate-a-code);
+                    }
+                }
+                GhostButton {
+                    label: "→ " + AppBridge.pinned-translate-b-label;
+                    clicked => {
+                        AppBridge.active-mode = "translate";
+                        AppBridge.execute-mode("translate", AppBridge.pinned-translate-b-code);
+                    }
+                }
+                // Palette summon. The palette hotkey is the OS-wide
+                // `hotkey_palette` (Ctrl+Shift+P by default) — no
+                // Ctrl/Cmd+K binding exists. Use GhostButton so the
+                // visual matches the adjacent Translate buttons.
+                GhostButton {
+                    label: "PALETTE";
+                    clicked => { AppBridge.open-palette(); }
+                }
+            }
+
+            // ── Stream result (appears when running) ───────────────────
+            // Keeps the element in the layout (not an `if`) so its opacity
+            // can animate in/out smoothly. We rely ONLY on opacity — the
+            // earlier `visible` + `opacity` pair caused the fade animation
+            // to run while the element was invisible (wasted work) and
+            // briefly clipped the panel on transition.
+            Rectangle {
+                opacity: AppBridge.is-streaming || AppBridge.is-done ? 1.0 : 0.0;
+                animate opacity { duration: 280ms; easing: ease-in-out; }
+                background: Theme.bg-surface;
+                border-radius: Theme.radius-sm;
+                border-width: Theme.border-w;
+                border-color: Theme.border;
+                min-height: 100px;
+                VerticalLayout {
+                    padding: Theme.sp-3;
+                    spacing: Theme.sp-2;
+                    Text {
+                        text: AppBridge.stream-buffer;
+                        color: Theme.text;
+                        font-family: Theme.font-prose;
+                        font-size: Theme.fs-body;
+                        font-italic: true;
+                        wrap: word-wrap;
+                    }
+                    if AppBridge.is-done: HorizontalLayout {
+                        spacing: Theme.sp-2;
+                        alignment: end;
+                        Rectangle {
+                            width: 88px;
+                            height: 28px;
+                            border-radius: Theme.radius-sm;
+                            border-width: Theme.border-w;
+                            border-color: cancel2-touch.has-hover ? Theme.text : Theme.border;
+                            background: transparent;
+                            Text {
+                                text: "CANCEL";
+                                color: cancel2-touch.has-hover ? Theme.text : Theme.muted;
+                                font-family: Theme.font-mono;
+                                font-size: Theme.fs-label;
+                                letter-spacing: 1.2px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                            cancel2-touch := TouchArea {
+                                clicked => { AppBridge.dismiss(); }
+                            }
+                        }
+                        PrimaryButton {
+                            label: "REPLACE";
+                            clicked => { AppBridge.confirm-replace(); }
+                        }
+                    }
+                    if AppBridge.is-streaming: HorizontalLayout {
+                        spacing: Theme.sp-2;
+                        alignment: end;
+                        Rectangle {
+                            width: 88px;
+                            height: 28px;
+                            border-radius: Theme.radius-sm;
+                            border-width: Theme.border-w;
+                            border-color: cancel-touch.has-hover ? Theme.text : Theme.border;
+                            background: transparent;
+                            Text {
+                                text: "CANCEL";
+                                color: cancel-touch.has-hover ? Theme.text : Theme.muted;
+                                font-family: Theme.font-mono;
+                                font-size: Theme.fs-label;
+                                letter-spacing: 1.2px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                            cancel-touch := TouchArea {
+                                clicked => { AppBridge.cancel-stream(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Toast {}
+        }
+    }
+}

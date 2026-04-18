@@ -6,17 +6,16 @@ model: google/gemma-3-27b-it        # Free tier on OpenRouter
 api_key: null                        # Set via env QUILL_API_KEY or settings UI
 base_url: https://openrouter.ai/api/v1
 
-# Custom headers for API authentication (generic provider only)
-# One header per line: "Header-Name: value"
-# Useful for self-hosted models behind API gateways (Kong, Nginx, Azure APIM)
-# Example: "X-Client-Id: my-app\nX-Client-Secret: my-secret"
-custom_headers: ""
-
-# null = OS-adaptive: Ctrl+Shift+Space on Windows/Linux, Cmd+Shift+Space on macOS
+# Hotkey spec uses Windows modifier names (Ctrl / Shift / Alt / Win) —
+# Quill is Windows-only; macOS Cmd and Linux Super are not recognised.
+# null = Ctrl+Shift+Space (compiled default)
 hotkey: null
+# Command palette (Tier 2). Ctrl+Shift+P matches VS Code / Slack / Sublime
+# muscle memory. Windows modifier names only (Ctrl/Shift/Alt/Win). Set to
+# null to skip registration.
+hotkey_palette: "Ctrl+Shift+P"
 
 language: auto                       # Default output language (overridden per-invocation by the overlay picker)
-overlay_position: near_cursor        # near_cursor | top_right | top_left
 stream: true
 
 # ── Persona / Voice ───────────────────────────────────────────────────────────
@@ -28,7 +27,7 @@ persona:
 
 # ── History & AI Tutor ────────────────────────────────────────────────────────
 history:
-  enabled: false                     # opt-in: stores transformations locally in ~/.quill/history.db
+  enabled: true                      # stores transformations locally in ~/.quill/history.db (set to false for strict no-history)
   max_entries: 10000                 # entries beyond this are pruned (oldest first)
 
 tutor:
@@ -41,7 +40,8 @@ clipboard_monitor:
   enabled: false                     # opt-in: watch clipboard and offer to transform new text
 
 # ── Quick Templates ───────────────────────────────────────────────────────────
-# Named mode + instruction presets shown as chips in the overlay.
+# Reserved for a future "quick presets" UI. Declaring templates has no
+# runtime effect today.
 # templates:
 #   - name: "Slack update"
 #     mode: shorter
@@ -50,6 +50,16 @@ clipboard_monitor:
 #     mode: formal
 #     instruction: "suitable for client communication"
 templates: []
+
+# ── UI: per-surface customisation ─────────────────────────────────────────────
+ui:
+  overlay:
+    # The two pinned translation targets shown as quick-action buttons on
+    # the Tier 1 overlay. Labels derive from the codes (uppercased).
+    # Change these to the pair you translate between most.
+    pinned_translate:
+      a: "en"
+      b: "fr"
 
 # Context-aware mode overrides (optional)
 # context:

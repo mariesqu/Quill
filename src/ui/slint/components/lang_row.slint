@@ -1,0 +1,29 @@
+import { Theme } from "../theme.slint";
+import { AppBridge, LanguageOpt } from "../app_bridge.slint";
+
+export component LangRow inherits HorizontalLayout {
+    spacing: Theme.sp-0;
+    alignment: start;
+    for lang in AppBridge.languages: Rectangle {
+        width: 36px;
+        height: 22px;
+        border-radius: Theme.radius-sm;
+        border-width: Theme.border-w;
+        border-color: AppBridge.active-language == lang.code ? Theme.accent : Theme.border;
+        background: AppBridge.active-language == lang.code ? Theme.accent : transparent;
+        animate background, border-color { duration: 120ms; }
+        Text {
+            text: lang.label;
+            color: AppBridge.active-language == lang.code ? Theme.on-accent : Theme.muted;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-label;
+            letter-spacing: 1px;
+            font-weight: AppBridge.active-language == lang.code ? 600 : 400;
+        }
+        TouchArea {
+            clicked => { AppBridge.set-language(lang.code); }
+        }
+    }
+}

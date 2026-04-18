@@ -1,54 +1,37 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.venv/
-venv/
-env/
-.env
-dist/
-build/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
 # Quill user config (contains API keys)
 config/user.yaml
-ui/config/
 
-# PyInstaller
-*.spec
-*.manifest
+# Secrets
+.env
+.env.local
 
-# Sidecar binaries (build artifacts — never commit)
-ui/quill-core.exe
-ui/quill-core-*.exe
-ui/src-tauri/quill-core
-ui/src-tauri/quill-core.exe
-ui/src-tauri/quill-core-*.exe
+# Defensive Python ignores (in case anyone runs a stale Python checkout)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
 
 # Node
 node_modules/
-ui/dist/
 
-# Tauri build artifacts
-ui/src-tauri/target/
-ui/src-tauri/gen/
-
-# SQLite databases
-*.db
-*.sqlite
+# Rust build
+/target/
 
 # OS
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
-*~
 
 # IDEs
 .vscode/settings.json
 .idea/
 *.iml
+
+# Superpowers brainstorm session artifacts (mockups, state files)
+.superpowers/
+.claude/

@@ -1,0 +1,68 @@
+import { Theme } from "../theme.slint";
+import { AppBridge, ToastKind } from "../app_bridge.slint";
+
+// Toast — a hairline-bordered notification bar. Colors are kept warm
+// (no neon red/green) to match the portfolio palette. The kind affects
+// only the glyph and accent color; the background stays `bg-base` with
+// a 1px border in the kind's color.
+export component Toast inherits Rectangle {
+    visible: AppBridge.toast.visible && AppBridge.toast.message != "";
+    height: 30px;
+    border-radius: Theme.radius-sm;
+    border-width: Theme.border-w;
+    // Expose the kind's accent as a named property so child Text nodes can
+    // reference `root.accent-color` directly (Slint does not allow
+    // `parent.parent.border-color` traversal).
+    property <color> accent-color:
+          AppBridge.toast.kind == ToastKind.success ? Theme.success
+        : AppBridge.toast.kind == ToastKind.warning ? Theme.warning
+        : AppBridge.toast.kind == ToastKind.error   ? Theme.error
+        : /* info */                                   Theme.info;
+    border-color: root.accent-color;
+    background: Theme.bg-base;
+    animate border-color { duration: 160ms; }
+
+    // Auto-dismiss after 4s — the Rust side has no retraction path for
+    // toasts today (it only ever emits `toast.visible = true`). Without
+    // this timer the last toast would linger until the next summon. The
+    // timer runs whenever the toast is visible and clears the flag once.
+    //
+    // NOTE: Slint does not allow single-field assignment on a global
+    // struct property (e.g. `AppBridge.toast.visible = false`). The
+    // struct-literal re-assignment is the required idiom — we copy
+    // `kind` and `message` through so only `visible` flips.
+    Timer {
+        interval: 4s;
+        running: AppBridge.toast.visible && AppBridge.toast.message != "";
+        triggered => {
+            AppBridge.toast = {
+                kind: AppBridge.toast.kind,
+                message: AppBridge.toast.message,
+                visible: false,
+            };
+        }
+    }
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        alignment: start;
+        spacing: Theme.sp-2;
+        Text {
+            text: AppBridge.toast.kind == ToastKind.success ? "✓"
+                : AppBridge.toast.kind == ToastKind.warning ? "⚠"
+                : AppBridge.toast.kind == ToastKind.error   ? "✕"
+                : /* info */                                   "ℹ";
+            color: root.accent-color;
+            font-family: "Segoe UI Symbol";
+            font-size: Theme.fs-lead;
+            vertical-alignment: center;
+        }
+        Text {
+            text: AppBridge.toast.message;
+            color: Theme.text;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-label;
+            vertical-alignment: center;
+        }
+    }
+}

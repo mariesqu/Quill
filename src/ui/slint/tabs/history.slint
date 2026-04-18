@@ -1,0 +1,153 @@
+import { Theme }                from "../theme.slint";
+import { AppBridge, HistoryEntry } from "../app_bridge.slint";
+
+component PillButton inherits Rectangle {
+    in property <string> label;
+    callback clicked();
+    height: 26px;
+    min-width: 72px;
+    border-radius: Theme.radius-sm;
+    border-width: Theme.border-w;
+    border-color: touch.has-hover ? Theme.accent : Theme.border;
+    background: touch.has-hover ? Theme.bg-elevated : Theme.bg-surface;
+    animate border-color, background { duration: 120ms; }
+    Text {
+        text: label;
+        color: touch.has-hover ? Theme.accent : Theme.text;
+        font-family: Theme.font-mono;
+        font-size: Theme.fs-label;
+        letter-spacing: 1.5px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component HistoryTab inherits Rectangle {
+    HorizontalLayout {
+        spacing: Theme.sp-3;
+
+        // Left: list
+        Rectangle {
+            width: 280px;
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
+            border-width: Theme.border-w;
+            border-color: Theme.border;
+            VerticalLayout {
+                padding: Theme.sp-2;
+                spacing: Theme.sp-1;
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "HISTORY";
+                        color: Theme.accent;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.fs-label;
+                        font-weight: 600;
+                        letter-spacing: 1.5px;
+                    }
+                    PillButton {
+                        label: "RELOAD";
+                        clicked => { AppBridge.load-history(); }
+                    }
+                }
+                Rectangle {
+                    background: transparent;
+                    // Without a Flickable wrapper the list clipped to its
+                    // parent rect — long histories had rows disappear off
+                    // the bottom of the panel with no way to scroll. Same
+                    // pattern as palette.slint's results-col.
+                    Flickable {
+                        vertical-stretch: 1;
+                        viewport-height: rows.preferred-height;
+                        rows := VerticalLayout {
+                            spacing: 4px;
+                            for entry in AppBridge.history: Rectangle {
+                                height: 48px;
+                                border-radius: Theme.radius-sm;
+                                background: entry-touch.has-hover ? Theme.bg-surface : transparent;
+                                VerticalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    padding-top: 4px;
+                                    padding-bottom: 4px;
+                                    spacing: 2px;
+                                    HorizontalLayout {
+                                        spacing: 4px;
+                                        Text {
+                                            text: entry.favorited ? "★" : "☆";
+                                            color: entry.favorited ? Theme.accent : Theme.muted;
+                                            font-size: 13px;
+                                            font-family: "Segoe UI Symbol";
+                                        }
+                                        Text {
+                                            text: entry.mode;
+                                            color: Theme.accent;
+                                            font-family: Theme.font-mono;
+                                            font-size: Theme.fs-micro;
+                                            letter-spacing: 1px;
+                                        }
+                                        Text {
+                                            text: entry.timestamp;
+                                            color: Theme.muted;
+                                            font-family: Theme.font-mono;
+                                            font-size: Theme.fs-micro;
+                                        }
+                                    }
+                                    Text {
+                                        text: entry.output;
+                                        color: Theme.text;
+                                        font-family: Theme.font-mono;
+                                        font-size: Theme.fs-micro;
+                                        overflow: elide;
+                                    }
+                                }
+                                entry-touch := TouchArea {
+                                    clicked => { AppBridge.toggle-favorite(entry.id); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Right: detail + export button
+        Rectangle {
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
+            border-width: Theme.border-w;
+            border-color: Theme.border;
+            VerticalLayout {
+                padding: Theme.sp-3;
+                spacing: Theme.sp-2;
+                Text {
+                    text: "Click ★/☆ to toggle favorite. Detail view + search land in a later plan.";
+                    color: Theme.muted;
+                    font-family: Theme.font-prose;
+                    font-italic: true;
+                    font-size: Theme.fs-ui;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: Theme.sp-1;
+                    PillButton {
+                        label: "JSON";
+                        clicked => { AppBridge.export-history("json"); }
+                    }
+                    PillButton {
+                        label: "CSV";
+                        clicked => { AppBridge.export-history("csv"); }
+                    }
+                    PillButton {
+                        label: "MARKDOWN";
+                        clicked => { AppBridge.export-history("md"); }
+                    }
+                }
+            }
+        }
+    }
+}
