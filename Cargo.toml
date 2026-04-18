@@ -10,6 +10,13 @@ edition = "2021"
 [build-dependencies]
 slint-build = "1.8"
 resvg       = "0.42"
+# Multi-size .ico generation for the Windows resource icon (Explorer,
+# taskbar, Alt-Tab). Without this the exe ships without an embedded
+# icon and Windows renders the generic exe glyph.
+ico         = "0.3"
+# Invokes the Windows resource compiler to embed the .ico into the exe
+# as a resource. Active fork of the unmaintained `winres`.
+winresource = "0.1"
 
 [dependencies]
 # UI

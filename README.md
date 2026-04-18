@@ -49,7 +49,11 @@ Works with any AI model — cloud or fully local. Single native `.exe`, warm-edi
 - **Windows 10 or 11** — UIA, WinEvent hooks, and DWM drop shadow all work on both
 - **Rust stable** (via [rustup](https://rustup.rs)) if building from source
 
-### Build from source
+### Install via MSI (end users)
+
+Download the `quill-<version>-x86_64.msi` from the [latest Release](https://github.com/mariesqu/Quill/releases/latest) and double-click it. The installer drops `quill.exe` into `Program Files\Quill`, creates a Start Menu shortcut, and registers an Add/Remove Programs entry. Launch from the Start Menu. No additional dependencies to install for the default providers (OpenRouter / Ollama / OpenAI / generic).
+
+### Build from source (developers)
 
 ```bash
 git clone https://github.com/mariesqu/Quill
@@ -60,6 +64,16 @@ cargo build --release
 ```
 
 The first build compiles every crate (Slint, tokio, reqwest, windows-rs, rusqlite) — allow 3–5 minutes. Subsequent builds are incremental and take seconds.
+
+To build the MSI installer locally (requires [WiX Toolset 3.x](https://github.com/wixtoolset/wix3/releases) + `cargo install cargo-wix`):
+
+```bash
+cargo build --release
+cargo wix --no-build
+# MSI lands at target/wix/quill-<version>-x86_64.msi
+```
+
+Releases are cut by pushing a `v*` tag; the `release.yml` workflow builds the MSI on `windows-latest` and attaches it to a GitHub Release automatically.
 
 ### Configure
 
