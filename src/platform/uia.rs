@@ -149,9 +149,7 @@ impl Uia {
     ///   `false` when it's the full element bounding rect
     ///
     /// Returns `Ok(None)` if no element is focused.
-    pub fn editable_caret_or_element_bounds(
-        &self,
-    ) -> Result<Option<(ScreenRect, bool, bool)>> {
+    pub fn editable_caret_or_element_bounds(&self) -> Result<Option<(ScreenRect, bool, bool)>> {
         let element = match self.focused_element() {
             Ok(e) => e,
             Err(_) => return Ok(None),
