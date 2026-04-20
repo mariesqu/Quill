@@ -2,7 +2,7 @@
 <!--
   Quill Windows installer (WiX Toolset 3.x source).
 
-  Builds via `cargo wix` after `cargo build --release`. The result is
+  Builds via `cargo wix` after `cargo build` (release profile). Result:
   `target/wix/quill-<version>-x86_64.msi` — a single-file installer
   that drops `quill.exe` into Program Files\Quill, creates a Start
   Menu shortcut, and registers an Add/Remove Programs entry. No
