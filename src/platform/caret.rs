@@ -2,15 +2,19 @@
 //!
 //! Installs `SetWinEventHook` on a dedicated thread that runs a Windows
 //! message pump. Events are classified and forwarded as `FocusEvent`s along
-//! a `tokio::sync::mpsc::UnboundedSender`. The caller decides what to do
-//! with them — currently the floating pencil indicator controller
+//! a `std::sync::mpsc::Sender`. The caller decides what to do with them —
+//! currently the floating pencil indicator controller
 //! (`ui::pencil_controller`).
+//!
+//! Uses `std::sync::mpsc` (not tokio) because the consumer needs
+//! `recv_timeout` for periodic selection-state polling, and neither the
+//! producer nor the consumer is running inside a tokio runtime.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use tokio::sync::mpsc::UnboundedSender;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -71,7 +75,7 @@ impl CaretHookService {
     /// The hook uses `WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS` so
     /// the callback runs on this thread (no DLL injection) and self-events
     /// from Quill are suppressed.
-    pub fn start(sender: UnboundedSender<FocusEvent>) -> Result<Self> {
+    pub fn start(sender: Sender<FocusEvent>) -> Result<Self> {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let stop_flag_clone = Arc::clone(&stop_flag);
 
@@ -116,12 +120,12 @@ impl Drop for CaretHookService {
 // (because we use WINEVENT_OUTOFCONTEXT), so there is no concurrent access.
 // ---------------------------------------------------------------------------
 thread_local! {
-    static SENDER: std::cell::RefCell<Option<UnboundedSender<FocusEvent>>> =
+    static SENDER: std::cell::RefCell<Option<Sender<FocusEvent>>> =
         const { std::cell::RefCell::new(None) };
 }
 
 /// Body of the hook thread.
-fn run_hook_thread(sender: UnboundedSender<FocusEvent>, stop: Arc<AtomicBool>) -> Result<()> {
+fn run_hook_thread(sender: Sender<FocusEvent>, stop: Arc<AtomicBool>) -> Result<()> {
     // Install the sender into the thread-local so the hook proc can reach it.
     SENDER.with(|cell| {
         *cell.borrow_mut() = Some(sender);

@@ -111,54 +111,7 @@ impl Uia {
     /// doesn't support the Text pattern.
     pub fn selection_bounds(&self) -> Result<Option<ScreenRect>> {
         let element = self.focused_element()?;
-        let Some(pattern) = get_text_pattern(&element)? else {
-            return Ok(None);
-        };
-
-        let ranges = unsafe { pattern.GetSelection().context("GetSelection")? };
-        let count = unsafe { ranges.Length().context("ranges.Length")? };
-        if count == 0 {
-            return Ok(None);
-        }
-
-        // Iterate over EVERY selected range and union all their rects.
-        // Earlier code only looked at `GetElement(0)` which missed
-        // multi-range selections (supported by controls that allow
-        // disjoint selections like rich-text editors).
-        let mut union = ScreenRect {
-            left: i32::MAX,
-            top: i32::MAX,
-            right: i32::MIN,
-            bottom: i32::MIN,
-        };
-        let mut any_rect = false;
-        for i in 0..count {
-            let range: IUIAutomationTextRange =
-                unsafe { ranges.GetElement(i).context("ranges.GetElement")? };
-            let rects_safearray = unsafe {
-                range
-                    .GetBoundingRectangles()
-                    .context("GetBoundingRectangles")?
-            };
-            // SAFETY: rects_safearray is a raw SAFEARRAY pointer returned by Windows.
-            let rects = unsafe { safearray_to_f64_vec(rects_safearray)? };
-            // Each entry in the flat array is a (left, top, width, height) quad.
-            for chunk in rects.chunks_exact(4) {
-                let l = chunk[0] as i32;
-                let t = chunk[1] as i32;
-                let w = chunk[2] as i32;
-                let h = chunk[3] as i32;
-                union.left = union.left.min(l);
-                union.top = union.top.min(t);
-                union.right = union.right.max(l + w);
-                union.bottom = union.bottom.max(t + h);
-                any_rect = true;
-            }
-        }
-        if !any_rect {
-            return Ok(None);
-        }
-        Ok(Some(union))
+        selection_bounds_for(&element)
     }
 
     /// Bounding rectangle of the currently focused UI element as a whole —
@@ -183,21 +136,37 @@ impl Uia {
     }
 
     /// Combined lookup for the pencil-controller hot path: fetch the
-    /// focused element ONCE, check editability on it, and return its
-    /// bounding rect + editability. Reduces the 3 round-trip COM call
-    /// pattern (focused_element → focused_element in is_editable_text →
-    /// focused_element in element_bounds) to a single `focused_element`.
+    /// focused element ONCE, check editability, and return a rect the
+    /// pencil can anchor to. Prefers the caret/selection rect (so the
+    /// pencil appears next to where the user is actually typing) and
+    /// falls back to the full element bounding rect when the caret rect
+    /// is unavailable (control doesn't support the Text pattern, or
+    /// `GetBoundingRectangles` returned empty for a collapsed caret).
     ///
-    /// Returns `Ok(Some((rect, true)))` when the focused element is an
-    /// editable text control, `Ok(Some((rect, false)))` when it's not
-    /// (so the caller can hide the pencil), or `Ok(None)` if no element
-    /// is focused.
-    pub fn editable_element_bounds(&self) -> Result<Option<(ScreenRect, bool)>> {
+    /// Returns `Ok(Some((rect, editable, is_caret)))`:
+    /// - `editable` — whether the focused control is a text edit/doc control
+    /// - `is_caret` — `true` when `rect` is the caret/selection rect,
+    ///   `false` when it's the full element bounding rect
+    ///
+    /// Returns `Ok(None)` if no element is focused.
+    pub fn editable_caret_or_element_bounds(
+        &self,
+    ) -> Result<Option<(ScreenRect, bool, bool)>> {
         let element = match self.focused_element() {
             Ok(e) => e,
             Err(_) => return Ok(None),
         };
         let editable = self.is_editable_text(&element).unwrap_or(false);
+
+        // Only bother with the caret lookup when the control is actually
+        // editable. For non-editable focus events the pencil is hidden
+        // anyway — no point paying the extra COM cost.
+        if editable {
+            if let Ok(Some(caret)) = selection_bounds_for(&element) {
+                return Ok(Some((caret, true, true)));
+            }
+        }
+
         let rect: RECT = unsafe {
             element
                 .CurrentBoundingRectangle()
@@ -211,6 +180,7 @@ impl Uia {
                 bottom: rect.bottom,
             },
             editable,
+            false,
         )))
     }
 
@@ -249,6 +219,59 @@ impl Uia {
         let pattern = get_text_pattern(element)?;
         Ok(pattern.is_some())
     }
+}
+
+/// Shared implementation for `selection_bounds` / the caret path in
+/// `editable_caret_or_element_bounds` — computes the union of all
+/// selection-range bounding rectangles for `element`. Returns `Ok(None)` when
+/// the element lacks the Text pattern, the selection is empty, or all ranges
+/// produced zero rectangles (collapsed caret in providers that don't emit a
+/// 1px insertion-point rect).
+fn selection_bounds_for(element: &IUIAutomationElement) -> Result<Option<ScreenRect>> {
+    let Some(pattern) = get_text_pattern(element)? else {
+        return Ok(None);
+    };
+
+    let ranges = unsafe { pattern.GetSelection().context("GetSelection")? };
+    let count = unsafe { ranges.Length().context("ranges.Length")? };
+    if count == 0 {
+        return Ok(None);
+    }
+
+    let mut union = ScreenRect {
+        left: i32::MAX,
+        top: i32::MAX,
+        right: i32::MIN,
+        bottom: i32::MIN,
+    };
+    let mut any_rect = false;
+    for i in 0..count {
+        let range: IUIAutomationTextRange =
+            unsafe { ranges.GetElement(i).context("ranges.GetElement")? };
+        let rects_safearray = unsafe {
+            range
+                .GetBoundingRectangles()
+                .context("GetBoundingRectangles")?
+        };
+        // SAFETY: rects_safearray is a raw SAFEARRAY pointer returned by Windows.
+        let rects = unsafe { safearray_to_f64_vec(rects_safearray)? };
+        // Each entry in the flat array is a (left, top, width, height) quad.
+        for chunk in rects.chunks_exact(4) {
+            let l = chunk[0] as i32;
+            let t = chunk[1] as i32;
+            let w = chunk[2] as i32;
+            let h = chunk[3] as i32;
+            union.left = union.left.min(l);
+            union.top = union.top.min(t);
+            union.right = union.right.max(l + w);
+            union.bottom = union.bottom.max(t + h);
+            any_rect = true;
+        }
+    }
+    if !any_rect {
+        return Ok(None);
+    }
+    Ok(Some(union))
 }
 
 /// Try to get the `IUIAutomationTextPattern` from `element`.

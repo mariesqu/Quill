@@ -197,7 +197,7 @@ fn main() -> Result<()> {
     // focuses an editable text control. Clicking it triggers the same flow
     // as the global hotkey.
     let pencil = pencil_window::build()?;
-    let (caret_tx, caret_rx) = mpsc::unbounded_channel::<FocusEvent>();
+    let (caret_tx, caret_rx) = std::sync::mpsc::channel::<FocusEvent>();
     let _caret_service = CaretHookService::start(caret_tx).context("start caret hook service")?;
     let _pencil_controller = PencilController::start(&pencil, caret_rx);
     let _pencil_proximity_timer = pencil_window::install_proximity_toggle(&pencil);
