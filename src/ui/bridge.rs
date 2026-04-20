@@ -78,6 +78,11 @@ pub fn seed_bridge(
         bridge
             .set_settings_palette_hotkey(config.hotkey_palette.clone().unwrap_or_default().into());
 
+        bridge.set_persona_enabled(config.persona.enabled);
+        bridge.set_persona_tone(config.persona.tone.clone().into());
+        bridge.set_persona_style(config.persona.style.clone().into());
+        bridge.set_persona_avoid(config.persona.avoid.clone().into());
+
         // Seed active-language from the saved config so the picker and
         // every bridge mirror in sync from boot.
         bridge.set_active_language(config.language.clone().into());
@@ -751,7 +756,7 @@ fn install_on_workspace(
 
     let window_weak_ss = window.as_weak();
     let tx_ss = tx.clone();
-    let tx_err = tx;
+    let tx_err = tx.clone();
     bridge.on_save_settings(move || {
         let Some(w) = window_weak_ss.upgrade() else {
             return;
@@ -801,6 +806,33 @@ fn install_on_workspace(
                 message: "Restart Quill for hotkey change to take effect".into(),
             });
         }
+    });
+
+    // ── Voice / Persona save handler ────────────────────────────────────
+    // Mirrors the settings save flow: read AppBridge.persona-* properties,
+    // pack them into a JSON merge patch, route through UiCommand::SaveConfig
+    // so save_user_config can merge into user.yaml under the config write
+    // lock. Engine::inner.config is cached at boot, so changes take effect
+    // on next launch — same as provider/model/hotkey.
+    let window_weak_vs = window.as_weak();
+    let tx_vs = tx.clone();
+    bridge.on_save_persona(move || {
+        let Some(w) = window_weak_vs.upgrade() else {
+            return;
+        };
+        let b = w.global::<AppBridge>();
+        let updates = serde_json::json!({
+            "persona": {
+                "enabled": b.get_persona_enabled(),
+                "tone":    b.get_persona_tone().as_str(),
+                "style":   b.get_persona_style().as_str(),
+                "avoid":   b.get_persona_avoid().as_str(),
+            }
+        });
+        let _ = tx_vs.send(UiCommand::SaveConfig { updates });
+        let _ = tx_vs.send(UiCommand::EmitInfo {
+            message: "Voice saved — restart Quill to apply".into(),
+        });
     });
 }
 

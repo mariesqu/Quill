@@ -1,0 +1,188 @@
+// ── Workspace Tab — Voice (Persona) ─────────────────────────────────────
+// Surfaces the `persona.*` block from user.yaml so users don't have to
+// hand-edit the file. Fields mirror `PersonaConfig` in src/core/config.rs:
+//   - enabled (bool)            → on/off switch
+//   - tone (enum string)         → chip row, mutually exclusive
+//   - style (free text)          → multi-line textarea
+//   - avoid (csv text)           → multi-line textarea
+//
+// SAVE writes via AppBridge.save-persona() → bridge.rs packs a JSON merge
+// patch → UiCommand::SaveConfig → save_user_config merges into user.yaml.
+// The running Engine caches config at boot, so changes take effect on
+// next launch — matching the existing pattern for provider/model/hotkey.
+
+import { Theme }     from "../theme.slint";
+import { AppBridge } from "../app_bridge.slint";
+
+// One tone option in the chip row — mirrors LangRow's active/inactive styling
+// so the Voice tab feels consistent with the language picker on Write.
+component ToneChip inherits Rectangle {
+    in property <string> value;
+    in property <string> label;
+    height: 26px;
+    min-width: 96px;
+    border-radius: Theme.radius-sm;
+    border-width: Theme.border-w;
+    border-color: AppBridge.persona-tone == value ? Theme.accent : Theme.border;
+    background: AppBridge.persona-tone == value ? Theme.accent : transparent;
+    animate background, border-color { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: Theme.sp-2;
+        padding-right: Theme.sp-2;
+        Text {
+            text: label;
+            color: AppBridge.persona-tone == value ? Theme.on-accent : Theme.muted;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-label;
+            letter-spacing: 1.5px;
+            font-weight: AppBridge.persona-tone == value ? 600 : 400;
+        }
+    }
+    TouchArea {
+        clicked => { AppBridge.persona-tone = value; }
+    }
+}
+
+// Free-text textarea. Slint's TextInput with `single-line: false` +
+// `wrap: word-wrap` yields a multi-line editor. We pair it with an
+// explicit label row for consistency with SettingField.
+component VoiceTextArea inherits Rectangle {
+    in property <string> label;
+    in-out property <string> value;
+    in property <length> area-height: 80px;
+    height: area-height + 32px;
+    background: Theme.bg-elevated;
+    border-radius: Theme.radius-md;
+    border-width: Theme.border-w;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: Theme.sp-2;
+        spacing: 2px;
+        Text {
+            text: label;
+            color: Theme.muted;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-micro;
+            letter-spacing: 1px;
+        }
+        TextInput {
+            text: value;
+            edited => { value = self.text; }
+            single-line: false;
+            wrap: word-wrap;
+            color: Theme.text;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-ui;
+            horizontal-alignment: left;
+        }
+    }
+}
+
+// Enabled toggle — minimalist pill, matches the app's warm-editorial
+// aesthetic rather than pulling in std-widgets::Switch.
+component EnabledToggle inherits Rectangle {
+    height: 30px;
+    width: 180px;
+    border-radius: Theme.radius-sm;
+    border-width: Theme.border-w;
+    border-color: AppBridge.persona-enabled ? Theme.accent : Theme.border;
+    background: AppBridge.persona-enabled ? Theme.accent : transparent;
+    animate background, border-color { duration: 120ms; }
+    Text {
+        text: AppBridge.persona-enabled ? "MY VOICE: ON" : "MY VOICE: OFF";
+        color: AppBridge.persona-enabled ? Theme.on-accent : Theme.muted;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-family: Theme.font-mono;
+        font-size: Theme.fs-label;
+        letter-spacing: 1.5px;
+        font-weight: AppBridge.persona-enabled ? 600 : 400;
+    }
+    TouchArea {
+        clicked => { AppBridge.persona-enabled = !AppBridge.persona-enabled; }
+    }
+}
+
+export component VoiceTab inherits Rectangle {
+    VerticalLayout {
+        spacing: Theme.sp-3;
+
+        // ── Eyebrow ──────────────────────────────────────────────────
+        Text {
+            text: "CONFIGURE A PERSONAL WRITING STYLE THAT APPLIES TO ALL MODES.";
+            color: Theme.muted;
+            font-family: Theme.font-mono;
+            font-size: Theme.fs-micro;
+            letter-spacing: 1.5px;
+        }
+
+        EnabledToggle {}
+
+        // ── Tone row ─────────────────────────────────────────────────
+        VerticalLayout {
+            spacing: Theme.sp-1;
+            Text {
+                text: "TONE";
+                color: Theme.muted;
+                font-family: Theme.font-mono;
+                font-size: Theme.fs-micro;
+                letter-spacing: 1px;
+            }
+            HorizontalLayout {
+                spacing: Theme.sp-1;
+                alignment: start;
+                ToneChip { value: "natural";      label: "NATURAL"; }
+                ToneChip { value: "casual";       label: "CASUAL"; }
+                ToneChip { value: "professional"; label: "PROFESSIONAL"; }
+                ToneChip { value: "witty";        label: "WITTY"; }
+                ToneChip { value: "direct";       label: "DIRECT"; }
+                ToneChip { value: "warm";         label: "WARM"; }
+            }
+        }
+
+        // ── Free-text fields ─────────────────────────────────────────
+        VoiceTextArea {
+            label: "STYLE — HOW YOU WRITE (e.g. 'Short punchy sentences. I use em-dashes.')";
+            value <=> AppBridge.persona-style;
+            area-height: 84px;
+        }
+
+        VoiceTextArea {
+            label: "AVOID — PHRASES OR PATTERNS TO STEER AWAY FROM (comma-separated)";
+            value <=> AppBridge.persona-avoid;
+            area-height: 64px;
+        }
+
+        // ── Save ─────────────────────────────────────────────────────
+        Rectangle {
+            width: 112px;
+            height: 30px;
+            border-radius: Theme.radius-sm;
+            background: save-touch.has-hover ? Theme.accent : Theme.accent-dim;
+            animate background { duration: 120ms; }
+            Text {
+                text: "SAVE";
+                color: Theme.on-accent;
+                font-family: Theme.font-mono;
+                font-size: Theme.fs-label;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            save-touch := TouchArea {
+                clicked => { AppBridge.save-persona(); }
+            }
+        }
+
+        Text {
+            text: "Persona is applied to every mode. Changes take effect on next Quill launch.";
+            color: Theme.muted;
+            font-family: Theme.font-prose;
+            font-italic: true;
+            font-size: Theme.fs-ui;
+        }
+    }
+}

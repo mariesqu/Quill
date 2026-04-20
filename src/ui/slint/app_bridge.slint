@@ -87,6 +87,14 @@ export global AppBridge {
     in-out property <string> settings-hotkey;
     in-out property <string> settings-palette-hotkey;
 
+    // Persona mirror (My Voice tab) — seeded at startup, edited in-place,
+    // flushed via save-persona. `persona-tone` is one of:
+    //   natural | casual | professional | witty | direct | warm
+    in-out property <bool>   persona-enabled;
+    in-out property <string> persona-tone: "natural";
+    in-out property <string> persona-style;
+    in-out property <string> persona-avoid;
+
     // Overlay pinned translate pair — seeded from Config.ui.overlay.pinned_translate.
     // The two codes feed execute-mode("translate", code); the labels are shown
     // in the overlay's quick-action buttons.
@@ -116,6 +124,7 @@ export global AppBridge {
     callback request-tutor-explain(int);
     callback generate-lesson(string /*daily|weekly*/);
     callback save-settings();
+    callback save-persona();
 
     // Tier 2 — open the command palette from the overlay's PALETTE button.
     callback open-palette();

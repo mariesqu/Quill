@@ -22,6 +22,7 @@ import { WriteTab }    from "./tabs/write.slint";
 import { HistoryTab }  from "./tabs/history.slint";
 import { TutorTab }    from "./tabs/tutor.slint";
 import { CompareTab }  from "./tabs/compare.slint";
+import { VoiceTab }    from "./tabs/voice.slint";
 import { SettingsTab } from "./tabs/settings.slint";
 
 component TabButton inherits Rectangle {
@@ -127,6 +128,7 @@ export component WorkspaceWindow inherits Window {
                 TabButton { label: "HISTORY";  tab-id: "history"; }
                 TabButton { label: "TUTOR";    tab-id: "tutor"; }
                 TabButton { label: "COMPARE";  tab-id: "compare"; }
+                TabButton { label: "VOICE";    tab-id: "voice"; }
                 TabButton { label: "SETTINGS"; tab-id: "settings"; }
             }
 
@@ -137,6 +139,7 @@ export component WorkspaceWindow inherits Window {
                 if AppBridge.current-tab == "history":  HistoryTab {}
                 if AppBridge.current-tab == "tutor":    TutorTab {}
                 if AppBridge.current-tab == "compare":  CompareTab {}
+                if AppBridge.current-tab == "voice":    VoiceTab {}
                 if AppBridge.current-tab == "settings": SettingsTab {}
             }
 
